@@ -191,31 +191,34 @@ public class RobotContainer {
 
     // Mode selection buttons
     drv.b().onTrue(Commands.runOnce(() -> currentDriveMode = DriveMode.STANDARD));
-    drv.y().onTrue(
-        Commands.runOnce(
-            () -> {
-              currentDriveMode = DriveMode.SNAKE;
-              snakeAngleController.reset(drive.getRotation().getRadians());
-              lastSnakeHeading = drive.getRotation().getRadians();
-            }));
-    drv.a().onTrue(
-        Commands.runOnce(
-            () -> {
-              currentDriveMode = DriveMode.AIM_TARGET;
-              aimTargetController.reset(drive.getRotation().getRadians());
-            }));
+    drv.y()
+        .onTrue(
+            Commands.runOnce(
+                () -> {
+                  currentDriveMode = DriveMode.SNAKE;
+                  snakeAngleController.reset(drive.getRotation().getRadians());
+                  lastSnakeHeading = drive.getRotation().getRadians();
+                }));
+    drv.a()
+        .onTrue(
+            Commands.runOnce(
+                () -> {
+                  currentDriveMode = DriveMode.AIM_TARGET;
+                  aimTargetController.reset(drive.getRotation().getRadians());
+                }));
 
     // Switch to X pattern when X button is pressed
     drv.x().onTrue(Commands.runOnce(drive::stopWithX, drive));
 
     // Reset gyro when Start button is pressed
-    drv.start().onTrue(
-        Commands.runOnce(
-                () ->
-                    drive.setPose(
-                        new Pose2d(drive.getPose().getTranslation(), Rotation2d.kZero)),
-                drive)
-            .ignoringDisable(true));
+    drv.start()
+        .onTrue(
+            Commands.runOnce(
+                    () ->
+                        drive.setPose(
+                            new Pose2d(drive.getPose().getTranslation(), Rotation2d.kZero)),
+                    drive)
+                .ignoringDisable(true));
 
     // Operator intake controls
     op.a().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
