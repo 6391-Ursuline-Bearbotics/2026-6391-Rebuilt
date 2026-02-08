@@ -1,0 +1,89 @@
+package frc.robot.subsystems.intake;
+
+import static frc.robot.util.PhoenixUtil.*;
+
+import com.ctre.phoenix6.BaseStatusSignal;
+import com.ctre.phoenix6.StatusSignal;
+import com.ctre.phoenix6.configs.TalonFXConfiguration;
+import com.ctre.phoenix6.controls.VelocityVoltage;
+import com.ctre.phoenix6.controls.VoltageOut;
+import com.ctre.phoenix6.hardware.ParentDevice;
+import com.ctre.phoenix6.hardware.TalonFX;
+import com.ctre.phoenix6.signals.InvertedValue;
+import com.ctre.phoenix6.signals.NeutralModeValue;
+import edu.wpi.first.math.filter.Debouncer;
+import edu.wpi.first.math.util.Units;
+import edu.wpi.first.units.measure.AngularVelocity;
+import edu.wpi.first.units.measure.Current;
+import edu.wpi.first.units.measure.Temperature;
+import edu.wpi.first.units.measure.Voltage;
+
+public class IntakeRollerIOTalonFX implements IntakeRollerIO {
+  private final TalonFX talon;
+
+  private final VoltageOut voltageRequest = new VoltageOut(0);
+  private final VelocityVoltage velocityRequest = new VelocityVoltage(0.0);
+
+  private final StatusSignal<AngularVelocity> velocity;
+  private final StatusSignal<Voltage> appliedVolts;
+  private final StatusSignal<Current> statorCurrent;
+  private final StatusSignal<Current> supplyCurrent;
+  private final StatusSignal<Temperature> temp;
+
+  private final Debouncer connectedDebounce = new Debouncer(0.5, Debouncer.DebounceType.kFalling);
+
+  public IntakeRollerIOTalonFX() {
+    talon = new TalonFX(IntakeConstants.rollerMotorId, IntakeConstants.canBus);
+
+    var config = new TalonFXConfiguration();
+    config.MotorOutput.NeutralMode = NeutralModeValue.Coast;
+    config.MotorOutput.Inverted =
+        IntakeConstants.rollerMotorInverted
+            ? InvertedValue.Clockwise_Positive
+            : InvertedValue.CounterClockwise_Positive;
+    config.Slot0 = IntakeConstants.rollerGains;
+    config.Feedback.SensorToMechanismRatio = IntakeConstants.rollerGearRatio;
+    config.CurrentLimits.StatorCurrentLimit = IntakeConstants.rollerStatorCurrentLimit;
+    config.CurrentLimits.StatorCurrentLimitEnable = true;
+    tryUntilOk(5, () -> talon.getConfigurator().apply(config, 0.25));
+
+    velocity = talon.getVelocity();
+    appliedVolts = talon.getMotorVoltage();
+    statorCurrent = talon.getStatorCurrent();
+    supplyCurrent = talon.getSupplyCurrent();
+    temp = talon.getDeviceTemp();
+
+    BaseStatusSignal.setUpdateFrequencyForAll(
+        50.0, velocity, appliedVolts, statorCurrent, supplyCurrent, temp);
+    ParentDevice.optimizeBusUtilizationForAll(talon);
+  }
+
+  @Override
+  public void updateInputs(IntakeRollerIOInputs inputs) {
+    var status =
+        BaseStatusSignal.refreshAll(velocity, appliedVolts, statorCurrent, supplyCurrent, temp);
+
+    inputs.connected = connectedDebounce.calculate(status.isOK());
+    inputs.velocityRadPerSec = Units.rotationsToRadians(velocity.getValueAsDouble());
+    inputs.appliedVolts = appliedVolts.getValueAsDouble();
+    inputs.statorCurrentAmps = statorCurrent.getValueAsDouble();
+    inputs.supplyCurrentAmps = supplyCurrent.getValueAsDouble();
+    inputs.tempCelsius = temp.getValueAsDouble();
+  }
+
+  @Override
+  public void setVelocity(double velocityRadPerSec) {
+    double velocityRotPerSec = Units.radiansToRotations(velocityRadPerSec);
+    talon.setControl(velocityRequest.withVelocity(velocityRotPerSec));
+  }
+
+  @Override
+  public void setVoltage(double volts) {
+    talon.setControl(voltageRequest.withOutput(volts));
+  }
+
+  @Override
+  public void stop() {
+    talon.setControl(voltageRequest.withOutput(0.0));
+  }
+}

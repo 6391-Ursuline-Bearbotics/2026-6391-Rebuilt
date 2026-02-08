@@ -34,6 +34,13 @@ import frc.robot.subsystems.drive.GyroIOPigeon2;
 import frc.robot.subsystems.drive.ModuleIO;
 import frc.robot.subsystems.drive.ModuleIOSim;
 import frc.robot.subsystems.drive.ModuleIOTalonFX;
+import frc.robot.subsystems.intake.Intake;
+import frc.robot.subsystems.intake.IntakeDeployIO;
+import frc.robot.subsystems.intake.IntakeDeployIOSim;
+import frc.robot.subsystems.intake.IntakeDeployIOTalonFX;
+import frc.robot.subsystems.intake.IntakeRollerIO;
+import frc.robot.subsystems.intake.IntakeRollerIOSim;
+import frc.robot.subsystems.intake.IntakeRollerIOTalonFX;
 import frc.robot.subsystems.vision.Vision;
 import frc.robot.subsystems.vision.VisionIO;
 import frc.robot.subsystems.vision.VisionIOLimelight;
@@ -58,9 +65,11 @@ public class RobotContainer {
   // Subsystems
   private final Drive drive;
   private final Vision vision;
+  private final Intake intake;
 
-  // Controller
-  private final CommandXboxController controller = new CommandXboxController(0);
+  // Controllers
+  private final CommandXboxController drv = new CommandXboxController(0);
+  private final CommandXboxController op = new CommandXboxController(1);
 
   // Dashboard inputs
   private final LoggedDashboardChooser<Command> autoChooser;
@@ -91,23 +100,9 @@ public class RobotContainer {
                 new VisionIOLimelight(camera1Name, drive::getRotation),
                 new VisionIOQuestNav("questnav"));
 
-        // The ModuleIOTalonFXS implementation provides an example implementation for
-        // TalonFXS controller connected to a CANdi with a PWM encoder. The
-        // implementations
-        // of ModuleIOTalonFX, ModuleIOTalonFXS, and ModuleIOSpark (from the Spark
-        // swerve
-        // template) can be freely intermixed to support alternative hardware
-        // arrangements.
-        // Please see the AdvantageKit template documentation for more information:
-        // https://docs.advantagekit.org/getting-started/template-projects/talonfx-swerve-template#custom-module-implementations
-        //
-        // drive =
-        // new Drive(
-        // new GyroIOPigeon2(),
-        // new ModuleIOTalonFXS(TunerConstants.FrontLeft),
-        // new ModuleIOTalonFXS(TunerConstants.FrontRight),
-        // new ModuleIOTalonFXS(TunerConstants.BackLeft),
-        // new ModuleIOTalonFXS(TunerConstants.BackRight));
+        // Intake with TalonFX hardware
+        intake = new Intake(new IntakeDeployIOTalonFX(), new IntakeRollerIOTalonFX());
+
         break;
 
       case SIM:
@@ -124,6 +119,7 @@ public class RobotContainer {
                 drive::addVisionMeasurement,
                 new VisionIOPhotonVisionSim(camera0Name, robotToCamera0, drive::getPose),
                 new VisionIOPhotonVisionSim(camera1Name, robotToCamera1, drive::getPose));
+        intake = new Intake(new IntakeDeployIOSim(), new IntakeRollerIOSim());
         break;
 
       default:
@@ -141,6 +137,7 @@ public class RobotContainer {
                 new VisionIO() {},
                 new VisionIO() {},
                 new VisionIO() {});
+        intake = new Intake(new IntakeDeployIO() {}, new IntakeRollerIO() {});
         break;
     }
 
@@ -193,38 +190,37 @@ public class RobotContainer {
             drive));
 
     // Mode selection buttons
-    controller.b().onTrue(Commands.runOnce(() -> currentDriveMode = DriveMode.STANDARD));
-    controller
-        .y()
-        .onTrue(
-            Commands.runOnce(
-                () -> {
-                  currentDriveMode = DriveMode.SNAKE;
-                  snakeAngleController.reset(drive.getRotation().getRadians());
-                  lastSnakeHeading = drive.getRotation().getRadians();
-                }));
-    controller
-        .a()
-        .onTrue(
-            Commands.runOnce(
-                () -> {
-                  currentDriveMode = DriveMode.AIM_TARGET;
-                  aimTargetController.reset(drive.getRotation().getRadians());
-                }));
+    drv.b().onTrue(Commands.runOnce(() -> currentDriveMode = DriveMode.STANDARD));
+    drv.y().onTrue(
+        Commands.runOnce(
+            () -> {
+              currentDriveMode = DriveMode.SNAKE;
+              snakeAngleController.reset(drive.getRotation().getRadians());
+              lastSnakeHeading = drive.getRotation().getRadians();
+            }));
+    drv.a().onTrue(
+        Commands.runOnce(
+            () -> {
+              currentDriveMode = DriveMode.AIM_TARGET;
+              aimTargetController.reset(drive.getRotation().getRadians());
+            }));
 
     // Switch to X pattern when X button is pressed
-    controller.x().onTrue(Commands.runOnce(drive::stopWithX, drive));
+    drv.x().onTrue(Commands.runOnce(drive::stopWithX, drive));
 
     // Reset gyro when Start button is pressed
-    controller
-        .start()
-        .onTrue(
-            Commands.runOnce(
-                    () ->
-                        drive.setPose(
-                            new Pose2d(drive.getPose().getTranslation(), Rotation2d.kZero)),
-                    drive)
-                .ignoringDisable(true));
+    drv.start().onTrue(
+        Commands.runOnce(
+                () ->
+                    drive.setPose(
+                        new Pose2d(drive.getPose().getTranslation(), Rotation2d.kZero)),
+                drive)
+            .ignoringDisable(true));
+
+    // Operator intake controls
+    op.a().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
+    op.b().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)));
+    op.y().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.DEPLOYED_IDLE)));
   }
 
   // Drive mode helper methods
@@ -241,7 +237,7 @@ public class RobotContainer {
 
   private void runStandardDrive() {
     Translation2d linearVelocity = getLinearVelocityFromJoysticks();
-    double omega = MathUtil.applyDeadband(-controller.getRightX(), 0.1);
+    double omega = MathUtil.applyDeadband(-drv.getRightX(), 0.1);
     omega = Math.copySign(omega * omega, omega);
 
     ChassisSpeeds speeds =
@@ -329,8 +325,8 @@ public class RobotContainer {
   }
 
   private Translation2d getLinearVelocityFromJoysticks() {
-    double x = -controller.getLeftY();
-    double y = -controller.getLeftX();
+    double x = -drv.getLeftY();
+    double y = -drv.getLeftX();
     double linearMagnitude = MathUtil.applyDeadband(Math.hypot(x, y), 0.1);
     Rotation2d linearDirection = new Rotation2d(Math.atan2(y, x));
     linearMagnitude = linearMagnitude * linearMagnitude;
