@@ -79,6 +79,7 @@ public class RobotContainer {
 
   /** The container for the robot. Contains subsystems, OI devices, and commands. */
   public RobotContainer() {
+    DriverStation.silenceJoystickConnectionWarning(true);
     switch (Constants.currentMode) {
       case REAL:
         // Real robot, instantiate hardware IO implementations
