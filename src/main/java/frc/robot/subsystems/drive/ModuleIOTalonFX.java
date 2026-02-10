@@ -12,6 +12,7 @@ import static frc.robot.util.PhoenixUtil.*;
 import com.ctre.phoenix6.BaseStatusSignal;
 import com.ctre.phoenix6.StatusSignal;
 import com.ctre.phoenix6.configs.CANcoderConfiguration;
+import com.ctre.phoenix6.configs.Slot0Configs;
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
 import com.ctre.phoenix6.controls.PositionTorqueCurrentFOC;
 import com.ctre.phoenix6.controls.PositionVoltage;
@@ -260,5 +261,18 @@ public class ModuleIOTalonFX implements ModuleIO {
           case TorqueCurrentFOC -> positionTorqueCurrentRequest.withPosition(
               rotation.getRotations());
         });
+  }
+
+  @Override
+  public void setDriveGains(double kP, double kD) {
+    var gains =
+        new Slot0Configs()
+            .withKP(kP)
+            .withKD(kD)
+            .withKS(constants.DriveMotorGains.kS)
+            .withKV(constants.DriveMotorGains.kV)
+            .withKA(constants.DriveMotorGains.kA)
+            .withStaticFeedforwardSign(constants.DriveMotorGains.StaticFeedforwardSign);
+    tryUntilOk(5, () -> driveTalon.getConfigurator().apply(gains, 0.25));
   }
 }

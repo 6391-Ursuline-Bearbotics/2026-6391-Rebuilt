@@ -138,4 +138,9 @@ public class Module {
   public double getFFCharacterizationVelocity() {
     return Units.radiansToRotations(inputs.driveVelocityRadPerSec);
   }
+
+  /** Set the drive motor PID gains. */
+  public void setDriveGains(double kP, double kD) {
+    io.setDriveGains(kP, kD);
+  }
 }

@@ -18,22 +18,27 @@ import edu.wpi.first.math.system.plant.LinearSystemId;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.simulation.DCMotorSim;
+import frc.robot.util.LoggedTunableNumber;
 
 /**
  * Physics sim implementation of module IO. The sim models are configured using a set of module
  * constants from Phoenix. Simulation is always based on voltage control.
  */
 public class ModuleIOSim implements ModuleIO {
-  // TunerConstants doesn't support separate sim constants, so they are declared
-  // locally
-  private static final double DRIVE_KP = 0.05;
-  private static final double DRIVE_KD = 0.0;
-  private static final double DRIVE_KS = 0.0;
-  private static final double DRIVE_KV_ROT =
-      0.91035; // Same units as TunerConstants: (volt * secs) / rotation
-  private static final double DRIVE_KV = 1.0 / Units.rotationsToRadians(1.0 / DRIVE_KV_ROT);
-  private static final double TURN_KP = 8.0;
-  private static final double TURN_KD = 0.0;
+  // Tunable sim PID gains
+  private static final LoggedTunableNumber driveSimKp =
+      new LoggedTunableNumber("Drive/Sim/DriveKP", 0.05);
+  private static final LoggedTunableNumber driveSimKd =
+      new LoggedTunableNumber("Drive/Sim/DriveKD", 0.0);
+  private static final LoggedTunableNumber driveSimKs =
+      new LoggedTunableNumber("Drive/Sim/DriveKS", 0.0);
+  private static final LoggedTunableNumber driveSimKvRot =
+      new LoggedTunableNumber("Drive/Sim/DriveKV", 0.91035); // (volt * secs) / rotation
+  private static final LoggedTunableNumber turnSimKp =
+      new LoggedTunableNumber("Drive/Sim/TurnKP", 8.0);
+  private static final LoggedTunableNumber turnSimKd =
+      new LoggedTunableNumber("Drive/Sim/TurnKD", 0.0);
+
   private static final DCMotor DRIVE_GEARBOX = DCMotor.getKrakenX60Foc(1);
   private static final DCMotor TURN_GEARBOX = DCMotor.getKrakenX60Foc(1);
 
@@ -42,8 +47,8 @@ public class ModuleIOSim implements ModuleIO {
 
   private boolean driveClosedLoop = false;
   private boolean turnClosedLoop = false;
-  private PIDController driveController = new PIDController(DRIVE_KP, 0, DRIVE_KD);
-  private PIDController turnController = new PIDController(TURN_KP, 0, TURN_KD);
+  private PIDController driveController = new PIDController(driveSimKp.get(), 0, driveSimKd.get());
+  private PIDController turnController = new PIDController(turnSimKp.get(), 0, turnSimKd.get());
   private double driveFFVolts = 0.0;
   private double driveAppliedVolts = 0.0;
   private double turnAppliedVolts = 0.0;
@@ -69,6 +74,18 @@ public class ModuleIOSim implements ModuleIO {
 
   @Override
   public void updateInputs(ModuleIOInputs inputs) {
+    // Update tunable gains
+    LoggedTunableNumber.ifChanged(
+        hashCode(),
+        values -> driveController.setPID(values[0], 0.0, values[1]),
+        driveSimKp,
+        driveSimKd);
+    LoggedTunableNumber.ifChanged(
+        hashCode(),
+        values -> turnController.setPID(values[0], 0.0, values[1]),
+        turnSimKp,
+        turnSimKd);
+
     // Run closed-loop control
     if (driveClosedLoop) {
       driveAppliedVolts =
@@ -126,7 +143,9 @@ public class ModuleIOSim implements ModuleIO {
   @Override
   public void setDriveVelocity(double velocityRadPerSec) {
     driveClosedLoop = true;
-    driveFFVolts = DRIVE_KS * Math.signum(velocityRadPerSec) + DRIVE_KV * velocityRadPerSec;
+    double ks = driveSimKs.get();
+    double kv = 1.0 / Units.rotationsToRadians(1.0 / driveSimKvRot.get());
+    driveFFVolts = ks * Math.signum(velocityRadPerSec) + kv * velocityRadPerSec;
     driveController.setSetpoint(velocityRadPerSec);
   }
 

@@ -9,10 +9,34 @@ import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants;
 import frc.robot.Constants.Mode;
+import frc.robot.util.LoggedTunableNumber;
 import org.littletonrobotics.junction.AutoLogOutput;
 import org.littletonrobotics.junction.Logger;
 
 public class Intake extends SubsystemBase {
+  // Tunable roller gains
+  private static final LoggedTunableNumber rollerKp =
+      new LoggedTunableNumber("Intake/Roller/kP", 0.1);
+  private static final LoggedTunableNumber rollerKv =
+      new LoggedTunableNumber("Intake/Roller/kV", 0.12);
+  private static final LoggedTunableNumber rollerKs =
+      new LoggedTunableNumber("Intake/Roller/kS", 0.0);
+
+  // Tunable roller velocity setpoints
+  private static final LoggedTunableNumber rollerIntakeRPM =
+      new LoggedTunableNumber("Intake/Roller/IntakeRPM", IntakeConstants.rollerIntakeVelocityRPM);
+  private static final LoggedTunableNumber rollerEjectRPM =
+      new LoggedTunableNumber("Intake/Roller/EjectRPM", IntakeConstants.rollerEjectVelocityRPM);
+
+  // Tunable deploy parameters
+  private static final LoggedTunableNumber deployVoltage =
+      new LoggedTunableNumber("Intake/Deploy/Voltage", IntakeConstants.deployVoltage);
+  private static final LoggedTunableNumber retractVoltage =
+      new LoggedTunableNumber("Intake/Deploy/RetractVoltage", IntakeConstants.retractVoltage);
+  private static final LoggedTunableNumber stallCurrentThreshold =
+      new LoggedTunableNumber(
+          "Intake/Deploy/StallCurrentThreshold", IntakeConstants.deployCurrentThreshold);
+
   /** Desired intake behavior, set by operator controls. */
   public enum Goal {
     IDLE, // Retracted, rollers off
@@ -109,14 +133,14 @@ public class Intake extends SubsystemBase {
     // Current spike detection: ignore inrush, then check threshold
     boolean stallDetected =
         stallTimer.hasElapsed(IntakeConstants.deployInrushIgnoreTime)
-            && deployInputs.statorCurrentAmps > IntakeConstants.deployCurrentThreshold;
+            && deployInputs.statorCurrentAmps > stallCurrentThreshold.get();
 
     // Deploy state machine
     switch (deployState) {
       case RETRACTED:
         if (goalWantsDeploy) {
           transitionTo(DeployState.DEPLOYING);
-          deployIO.setVoltage(IntakeConstants.deployVoltage);
+          deployIO.setVoltage(deployVoltage.get());
         } else {
           deployIO.stop();
         }
@@ -125,45 +149,53 @@ public class Intake extends SubsystemBase {
       case DEPLOYING:
         if (!goalWantsDeploy) {
           transitionTo(DeployState.RETRACTING);
-          deployIO.setVoltage(IntakeConstants.retractVoltage);
+          deployIO.setVoltage(retractVoltage.get());
         } else if (stallDetected) {
           transitionTo(DeployState.DEPLOYED);
-          deployIO.setVoltage(IntakeConstants.deployHoldVoltage);
+          deployIO.stop();
         } else {
-          deployIO.setVoltage(IntakeConstants.deployVoltage);
+          deployIO.setVoltage(deployVoltage.get());
         }
         break;
 
       case DEPLOYED:
         if (!goalWantsDeploy) {
           transitionTo(DeployState.RETRACTING);
-          deployIO.setVoltage(IntakeConstants.retractVoltage);
+          deployIO.setVoltage(retractVoltage.get());
         } else {
-          deployIO.setVoltage(IntakeConstants.deployHoldVoltage);
+          deployIO.stop();
         }
         break;
 
       case RETRACTING:
         if (goalWantsDeploy) {
           transitionTo(DeployState.DEPLOYING);
-          deployIO.setVoltage(IntakeConstants.deployVoltage);
+          deployIO.setVoltage(deployVoltage.get());
         } else if (stallDetected) {
           transitionTo(DeployState.RETRACTED);
           deployIO.stop();
         } else {
-          deployIO.setVoltage(IntakeConstants.retractVoltage);
+          deployIO.setVoltage(retractVoltage.get());
         }
         break;
     }
+
+    // Update roller gains if tuned
+    LoggedTunableNumber.ifChanged(
+        hashCode(),
+        values -> rollerIO.setGains(values[0], values[1], values[2]),
+        rollerKp,
+        rollerKv,
+        rollerKs);
 
     // Roller control: only run when fully deployed
     if (deployState == DeployState.DEPLOYED) {
       switch (goal) {
         case INTAKE:
-          rollerIO.setVelocity(rpmToRadPerSec(IntakeConstants.rollerIntakeVelocityRPM));
+          rollerIO.setVelocity(rpmToRadPerSec(rollerIntakeRPM.get()));
           break;
         case EJECT:
-          rollerIO.setVelocity(rpmToRadPerSec(IntakeConstants.rollerEjectVelocityRPM));
+          rollerIO.setVelocity(rpmToRadPerSec(rollerEjectRPM.get()));
           break;
         default:
           rollerIO.stop();

@@ -18,6 +18,9 @@ public final class Constants {
   public static final Mode simMode = Mode.SIM;
   public static final Mode currentMode = RobotBase.isReal() ? Mode.REAL : simMode;
 
+  /** Enable tunable numbers via NetworkTables for PID tuning in AdvantageScope. */
+  public static final boolean tuningMode = true;
+
   public static enum Mode {
     /** Running on a real robot. */
     REAL,

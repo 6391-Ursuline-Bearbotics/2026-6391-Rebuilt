@@ -20,4 +20,6 @@ public interface IntakeRollerIO {
   public default void setVoltage(double volts) {}
 
   public default void stop() {}
+
+  public default void setGains(double kP, double kV, double kS) {}
 }

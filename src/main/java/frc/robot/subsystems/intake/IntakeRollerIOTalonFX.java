@@ -4,6 +4,7 @@ import static frc.robot.util.PhoenixUtil.*;
 
 import com.ctre.phoenix6.BaseStatusSignal;
 import com.ctre.phoenix6.StatusSignal;
+import com.ctre.phoenix6.configs.Slot0Configs;
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
 import com.ctre.phoenix6.controls.VelocityVoltage;
 import com.ctre.phoenix6.controls.VoltageOut;
@@ -85,5 +86,11 @@ public class IntakeRollerIOTalonFX implements IntakeRollerIO {
   @Override
   public void stop() {
     talon.setControl(voltageRequest.withOutput(0.0));
+  }
+
+  @Override
+  public void setGains(double kP, double kV, double kS) {
+    var gains = new Slot0Configs().withKP(kP).withKV(kV).withKS(kS);
+    tryUntilOk(5, () -> talon.getConfigurator().apply(gains, 0.25));
   }
 }

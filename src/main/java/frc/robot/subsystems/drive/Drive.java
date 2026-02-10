@@ -37,6 +37,7 @@ import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 import frc.robot.Constants;
 import frc.robot.Constants.Mode;
 import frc.robot.generated.TunerConstants;
+import frc.robot.util.LoggedTunableNumber;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import org.littletonrobotics.junction.AutoLogOutput;
@@ -54,10 +55,29 @@ public class Drive extends SubsystemBase {
               Math.hypot(TunerConstants.BackLeft.LocationX, TunerConstants.BackLeft.LocationY),
               Math.hypot(TunerConstants.BackRight.LocationX, TunerConstants.BackRight.LocationY)));
 
+  // Tunable drive motor gains (kP/kD only, FF preserved from TunerConstants)
+  private static final LoggedTunableNumber driveKp =
+      new LoggedTunableNumber("Drive/Module/DriveKP", 12.5);
+  private static final LoggedTunableNumber driveKd =
+      new LoggedTunableNumber("Drive/Module/DriveKD", 0.0);
+
+  // Choreo trajectory following tunable gains
+  private static final LoggedTunableNumber trajectoryKp =
+      new LoggedTunableNumber("Drive/Trajectory/kP", 5.0);
+  private static final LoggedTunableNumber trajectoryKd =
+      new LoggedTunableNumber("Drive/Trajectory/kD", 0.0);
+  private static final LoggedTunableNumber headingKp =
+      new LoggedTunableNumber("Drive/Trajectory/HeadingkP", 5.0);
+  private static final LoggedTunableNumber headingKd =
+      new LoggedTunableNumber("Drive/Trajectory/HeadingkD", 0.0);
+
   // Choreo trajectory following PID controllers
-  private final PIDController xController = new PIDController(5.0, 0.0, 0.0);
-  private final PIDController yController = new PIDController(5.0, 0.0, 0.0);
-  private final PIDController headingController = new PIDController(5.0, 0.0, 0.0);
+  private final PIDController xController =
+      new PIDController(trajectoryKp.get(), 0.0, trajectoryKd.get());
+  private final PIDController yController =
+      new PIDController(trajectoryKp.get(), 0.0, trajectoryKd.get());
+  private final PIDController headingController =
+      new PIDController(headingKp.get(), 0.0, headingKd.get());
 
   static final Lock odometryLock = new ReentrantLock();
   private final GyroIO gyroIO;
@@ -170,6 +190,32 @@ public class Drive extends SubsystemBase {
       // Apply update
       poseEstimator.updateWithTime(sampleTimestamps[i], rawGyroRotation, modulePositions);
     }
+
+    // Update tunable drive motor gains
+    LoggedTunableNumber.ifChanged(
+        hashCode(),
+        values -> {
+          for (var module : modules) {
+            module.setDriveGains(values[0], values[1]);
+          }
+        },
+        driveKp,
+        driveKd);
+
+    // Update tunable PID gains
+    LoggedTunableNumber.ifChanged(
+        hashCode(),
+        values -> {
+          xController.setPID(values[0], 0.0, values[1]);
+          yController.setPID(values[0], 0.0, values[1]);
+        },
+        trajectoryKp,
+        trajectoryKd);
+    LoggedTunableNumber.ifChanged(
+        hashCode(),
+        values -> headingController.setPID(values[0], 0.0, values[1]),
+        headingKp,
+        headingKd);
 
     // Update gyro alert
     gyroDisconnectedAlert.set(!gyroInputs.connected && Constants.currentMode != Mode.SIM);

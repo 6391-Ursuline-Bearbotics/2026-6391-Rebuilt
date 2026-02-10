@@ -8,16 +8,18 @@ import edu.wpi.first.wpilibj.simulation.DCMotorSim;
 
 public class IntakeRollerIOSim implements IntakeRollerIO {
   private static final DCMotor GEARBOX = DCMotor.getFalcon500(1);
-  private static final double SIM_KP = 0.05;
-  private static final double SIM_KV = 0.12;
-  private static final double SIM_KS = 0.0;
+  private static final double DEFAULT_SIM_KP = 0.05;
+  private static final double DEFAULT_SIM_KV = 0.12;
+  private static final double DEFAULT_SIM_KS = 0.0;
 
   private final DCMotorSim sim;
-  private final PIDController controller = new PIDController(SIM_KP, 0, 0);
+  private final PIDController controller = new PIDController(DEFAULT_SIM_KP, 0, 0);
 
   private boolean closedLoop = false;
   private double ffVolts = 0.0;
   private double appliedVolts = 0.0;
+  private double simKv = DEFAULT_SIM_KV;
+  private double simKs = DEFAULT_SIM_KS;
 
   public IntakeRollerIOSim() {
     sim =
@@ -49,7 +51,7 @@ public class IntakeRollerIOSim implements IntakeRollerIO {
   @Override
   public void setVelocity(double velocityRadPerSec) {
     closedLoop = true;
-    ffVolts = SIM_KS * Math.signum(velocityRadPerSec) + SIM_KV * velocityRadPerSec;
+    ffVolts = simKs * Math.signum(velocityRadPerSec) + simKv * velocityRadPerSec;
     controller.setSetpoint(velocityRadPerSec);
   }
 
@@ -63,5 +65,12 @@ public class IntakeRollerIOSim implements IntakeRollerIO {
   public void stop() {
     closedLoop = false;
     appliedVolts = 0.0;
+  }
+
+  @Override
+  public void setGains(double kP, double kV, double kS) {
+    controller.setP(kP);
+    simKv = kV;
+    simKs = kS;
   }
 }
