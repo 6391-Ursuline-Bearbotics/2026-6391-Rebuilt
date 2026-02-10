@@ -66,7 +66,7 @@ public class RobotContainer {
   // Subsystems
   private final Drive drive;
   private final Vision vision;
-  // private final Intake intake;
+  private final Intake intake;
 
   // Controllers
   private final CommandXboxController drv = new CommandXboxController(0);
@@ -105,7 +105,7 @@ public class RobotContainer {
                 new VisionIOQuestNav("questnav"));
 
         // Intake with TalonFX hardware
-        // intake = new Intake(new IntakeDeployIOTalonFX(), new IntakeRollerIOTalonFX());
+        intake = new Intake(new IntakeDeployIOTalonFX(), new IntakeRollerIOTalonFX());
 
         break;
 
@@ -123,7 +123,7 @@ public class RobotContainer {
                 drive::addVisionMeasurement,
                 new VisionIOPhotonVisionSim(camera0Name, robotToCamera0, drive::getPose),
                 new VisionIOPhotonVisionSim(camera1Name, robotToCamera1, drive::getPose));
-        // intake = new Intake(new IntakeDeployIOSim(), new IntakeRollerIOSim());
+        intake = new Intake(new IntakeDeployIOSim(), new IntakeRollerIOSim());
         break;
 
       default:
@@ -141,7 +141,7 @@ public class RobotContainer {
                 new VisionIO() {},
                 new VisionIO() {},
                 new VisionIO() {});
-        // intake = new Intake(new IntakeDeployIO() {}, new IntakeRollerIO() {});
+        intake = new Intake(new IntakeDeployIO() {}, new IntakeRollerIO() {});
         break;
     }
 
@@ -233,9 +233,9 @@ public class RobotContainer {
                 .ignoringDisable(true));
 
     // Operator intake controls
-    /* op.a().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
+    op.a().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
     op.b().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)));
-    op.y().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.DEPLOYED_IDLE))); */
+    op.y().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.DEPLOYED_IDLE)));
   }
 
   // Drive mode helper methods

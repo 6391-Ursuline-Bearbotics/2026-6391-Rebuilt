@@ -5,8 +5,8 @@ import com.ctre.phoenix6.configs.Slot0Configs;
 
 public final class IntakeConstants {
   // CAN IDs (placeholder - update to match robot wiring)
-  public static final int deployMotorId = 51;
-  public static final int rollerMotorId = 52;
+  public static final int deployMotorId = 4;
+  public static final int rollerMotorId = 3;
   public static final CANBus canBus = new CANBus("");
 
   // Deploy motor
