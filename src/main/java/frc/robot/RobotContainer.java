@@ -19,6 +19,7 @@ import edu.wpi.first.math.geometry.Transform2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
+import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj.GenericHID;
@@ -161,6 +162,8 @@ public class RobotContainer {
         () -> DriveCommands.wheelRadiusCharacterization(drive));
     autoChooser.addCmd(
         "Drive Simple FF Characterization", () -> DriveCommands.feedforwardCharacterization(drive));
+    autoChooser.addCmd(
+        "Drive Forward 15ft", () -> DriveCommands.driveForward(drive, Units.feetToMeters(15)));
     autoChooser.addCmd(
         "Drive SysId (Quasistatic Forward)",
         () -> drive.sysIdQuasistatic(SysIdRoutine.Direction.kForward));

@@ -351,6 +351,43 @@ public class DriveCommands {
                     })));
   }
 
+  /**
+   * Drives the robot forward a specified distance at a moderate speed. Useful for verifying encoder
+   * accuracy by measuring actual distance traveled vs. odometry.
+   */
+  public static Command driveForward(Drive drive, double distanceMeters) {
+    double speedMetersPerSec = 1.5;
+
+    return Commands.sequence(
+        // Reset odometry to origin facing forward
+        Commands.runOnce(() -> drive.setPose(new Pose2d())),
+
+        // Drive forward (robot-relative) until distance reached
+        Commands.run(() -> drive.runVelocity(new ChassisSpeeds(speedMetersPerSec, 0.0, 0.0)), drive)
+            .until(() -> drive.getPose().getTranslation().getNorm() >= distanceMeters),
+
+        // Stop and print results
+        Commands.runOnce(drive::stop, drive),
+        Commands.runOnce(
+            () -> {
+              double actual = drive.getPose().getTranslation().getNorm();
+              NumberFormat formatter = new DecimalFormat("#0.000");
+              System.out.println("********** Drive Forward Results **********");
+              System.out.println(
+                  "\tTarget: "
+                      + formatter.format(distanceMeters)
+                      + " m ("
+                      + formatter.format(Units.metersToFeet(distanceMeters))
+                      + " ft)");
+              System.out.println(
+                  "\tActual: "
+                      + formatter.format(actual)
+                      + " m ("
+                      + formatter.format(Units.metersToFeet(actual))
+                      + " ft)");
+            }));
+  }
+
   private static class WheelRadiusCharacterizationState {
     double[] positions = new double[4];
     Rotation2d lastAngle = Rotation2d.kZero;

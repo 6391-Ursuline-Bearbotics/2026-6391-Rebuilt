@@ -28,16 +28,16 @@
    }
   },
   "mass":{
-   "exp":"150 lbs",
-   "val":68.0388555
+   "exp":"70 lbs",
+   "val":31.751465900000003
   },
   "inertia":{
-   "exp":"6 kg m ^ 2",
-   "val":6.0
+   "exp":"2 kg m ^ 2",
+   "val":2.0
   },
   "gearing":{
-   "exp":"6.5",
-   "val":6.5
+   "exp":"6.75",
+   "val":6.75
   },
   "radius":{
    "exp":"2 in",
