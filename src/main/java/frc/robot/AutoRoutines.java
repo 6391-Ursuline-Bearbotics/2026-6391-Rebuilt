@@ -2,6 +2,7 @@ package frc.robot;
 
 import choreo.auto.AutoFactory;
 import choreo.auto.AutoRoutine;
+import choreo.auto.AutoTrajectory;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj2.command.Commands;
@@ -26,6 +27,18 @@ public class AutoRoutines {
             factory
                 .resetOdometry(() -> Optional.of(new Pose2d(3.559, 4.0296, Rotation2d.kZero)))
                 .andThen(Commands.print("Odometry reset to start position")));
+
+    return routine;
+  }
+
+  public AutoRoutine depotCycle() {
+    AutoRoutine routine = factory.newRoutine("Depot Cycle");
+
+    // Load the routine's trajectories
+    AutoTrajectory depotCycle = routine.trajectory("DepotCycle");
+
+    // When the routine begins, reset odometry and start the first trajectory (1)
+    routine.active().onTrue(Commands.sequence(depotCycle.resetOdometry(), depotCycle.cmd()));
 
     return routine;
   }
