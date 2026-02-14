@@ -61,6 +61,12 @@ public class Drive extends SubsystemBase {
   private static final LoggedTunableNumber driveKd =
       new LoggedTunableNumber("Drive/Module/DriveKD", 0.0);
 
+  // Heading correction tunable gains (holds heading when not commanding rotation)
+  private static final LoggedTunableNumber headingCorrectionKp =
+      new LoggedTunableNumber("Drive/HeadingCorrection/kP", 3.0);
+  private static final LoggedTunableNumber headingCorrectionKd =
+      new LoggedTunableNumber("Drive/HeadingCorrection/kD", 0.0);
+
   // Choreo trajectory following tunable gains
   private static final LoggedTunableNumber trajectoryKp =
       new LoggedTunableNumber("Drive/Trajectory/kP", 5.0);
@@ -70,6 +76,11 @@ public class Drive extends SubsystemBase {
       new LoggedTunableNumber("Drive/Trajectory/HeadingkP", 5.0);
   private static final LoggedTunableNumber headingKd =
       new LoggedTunableNumber("Drive/Trajectory/HeadingkD", 0.0);
+
+  // Heading correction PID controller
+  private final PIDController headingCorrectionController =
+      new PIDController(headingCorrectionKp.get(), 0.0, headingCorrectionKd.get());
+  private Rotation2d headingTarget = null;
 
   // Choreo trajectory following PID controllers
   private final PIDController xController =
@@ -121,7 +132,8 @@ public class Drive extends SubsystemBase {
     // Start odometry thread
     PhoenixOdometryThread.getInstance().start();
 
-    // Configure heading controller for continuous input
+    // Configure heading controllers for continuous input
+    headingCorrectionController.enableContinuousInput(-Math.PI, Math.PI);
     headingController.enableContinuousInput(-Math.PI, Math.PI);
 
     // Configure SysId
@@ -202,6 +214,13 @@ public class Drive extends SubsystemBase {
         driveKp,
         driveKd);
 
+    // Update tunable heading correction gains
+    LoggedTunableNumber.ifChanged(
+        hashCode(),
+        values -> headingCorrectionController.setPID(values[0], 0.0, values[1]),
+        headingCorrectionKp,
+        headingCorrectionKd);
+
     // Update tunable PID gains
     LoggedTunableNumber.ifChanged(
         hashCode(),
@@ -230,6 +249,18 @@ public class Drive extends SubsystemBase {
    * @param speeds Speeds in meters/sec
    */
   public void runVelocity(ChassisSpeeds speeds) {
+    // Heading correction: hold heading when no rotation is commanded
+    if (Math.abs(speeds.omegaRadiansPerSecond) < 0.05) {
+      if (headingTarget == null) {
+        headingTarget = getRotation();
+      }
+      speeds.omegaRadiansPerSecond =
+          headingCorrectionController.calculate(
+              getRotation().getRadians(), headingTarget.getRadians());
+    } else {
+      headingTarget = null;
+    }
+
     // Calculate module setpoints
     ChassisSpeeds discreteSpeeds = ChassisSpeeds.discretize(speeds, 0.02);
     SwerveModuleState[] setpointStates = kinematics.toSwerveModuleStates(discreteSpeeds);

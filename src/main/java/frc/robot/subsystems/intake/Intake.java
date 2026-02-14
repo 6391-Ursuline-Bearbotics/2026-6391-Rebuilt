@@ -209,6 +209,12 @@ public class Intake extends SubsystemBase {
   }
 
   private void transitionTo(DeployState newState) {
+    // Switch to coast when deployed so intake can be pushed back
+    if (newState == DeployState.DEPLOYED) {
+      deployIO.setBrakeMode(false);
+    } else if (deployState == DeployState.DEPLOYED) {
+      deployIO.setBrakeMode(true);
+    }
     deployState = newState;
     stallTimer.restart();
   }

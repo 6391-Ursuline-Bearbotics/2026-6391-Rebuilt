@@ -22,11 +22,10 @@ public class VisionConstants {
   public static String camera1Name = "camera_1";
 
   // Robot to camera transforms
-  // (Not used by Limelight, configure in web UI instead)
+  // (Not used by Limelight at runtime, but used by PhotonVision sim)
+  // Camera 0: rear-facing, 7.91" high, tilted up 25 degrees
   public static Transform3d robotToCamera0 =
-      new Transform3d(0.2, 0.0, 0.2, new Rotation3d(0.0, -0.4, 0.0));
-  public static Transform3d robotToCamera1 =
-      new Transform3d(-0.2, 0.0, 0.2, new Rotation3d(0.0, -0.4, Math.PI));
+      new Transform3d(-0.3, 0.0, 0.201, new Rotation3d(0.0, Math.toRadians(-25.0), Math.PI));
 
   // Basic filtering thresholds
   public static double maxAmbiguity = 0.3;
@@ -41,9 +40,7 @@ public class VisionConstants {
   // (Adjust to trust some cameras more than others)
   public static double[] cameraStdDevFactors =
       new double[] {
-        1.0, // Camera 0 (Limelight)
-        1.0, // Camera 1 (Limelight)
-        1.0 // Camera 2 (QuestNav)
+        1.0 // Camera 0 (Limelight)
       };
 
   // Multipliers to apply for MegaTag 2 observations

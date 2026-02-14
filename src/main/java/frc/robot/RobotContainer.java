@@ -48,7 +48,6 @@ import frc.robot.subsystems.vision.Vision;
 import frc.robot.subsystems.vision.VisionIO;
 import frc.robot.subsystems.vision.VisionIOLimelight;
 import frc.robot.subsystems.vision.VisionIOPhotonVisionSim;
-import frc.robot.subsystems.vision.VisionIOQuestNav;
 
 /**
  * This class is where the bulk of the robot should be declared. Since Command-based is a
@@ -97,13 +96,11 @@ public class RobotContainer {
                 new ModuleIOTalonFX(TunerConstants.BackLeft),
                 new ModuleIOTalonFX(TunerConstants.BackRight));
 
-        // Vision with 2 Limelights + QuestNav
+        // Vision with 1 Limelight (camera0 only for initial testing)
         vision =
             new Vision(
                 drive::addVisionMeasurement,
-                new VisionIOLimelight(camera0Name, drive::getRotation),
-                new VisionIOLimelight(camera1Name, drive::getRotation),
-                new VisionIOQuestNav("questnav"));
+                new VisionIOLimelight(camera0Name, drive::getRotation));
 
         // Intake with TalonFX hardware
         intake = new Intake(new IntakeDeployIOTalonFX(), new IntakeRollerIOTalonFX());
@@ -122,8 +119,7 @@ public class RobotContainer {
         vision =
             new Vision(
                 drive::addVisionMeasurement,
-                new VisionIOPhotonVisionSim(camera0Name, robotToCamera0, drive::getPose),
-                new VisionIOPhotonVisionSim(camera1Name, robotToCamera1, drive::getPose));
+                new VisionIOPhotonVisionSim(camera0Name, robotToCamera0, drive::getPose));
         intake = new Intake(new IntakeDeployIOSim(), new IntakeRollerIOSim());
         break;
 
@@ -136,12 +132,7 @@ public class RobotContainer {
                 new ModuleIO() {},
                 new ModuleIO() {},
                 new ModuleIO() {});
-        vision =
-            new Vision(
-                drive::addVisionMeasurement,
-                new VisionIO() {},
-                new VisionIO() {},
-                new VisionIO() {});
+        vision = new Vision(drive::addVisionMeasurement, new VisionIO() {});
         intake = new Intake(new IntakeDeployIO() {}, new IntakeRollerIO() {});
         break;
     }
