@@ -37,6 +37,13 @@ import frc.robot.subsystems.drive.GyroIOPigeon2;
 import frc.robot.subsystems.drive.ModuleIO;
 import frc.robot.subsystems.drive.ModuleIOSim;
 import frc.robot.subsystems.drive.ModuleIOTalonFX;
+import frc.robot.subsystems.indexer.Indexer;
+import frc.robot.subsystems.indexer.IndexerBeltIO;
+import frc.robot.subsystems.indexer.IndexerBeltIOSim;
+import frc.robot.subsystems.indexer.IndexerBeltIOTalonFX;
+import frc.robot.subsystems.indexer.IndexerKickerIO;
+import frc.robot.subsystems.indexer.IndexerKickerIOSim;
+import frc.robot.subsystems.indexer.IndexerKickerIOTalonFX;
 import frc.robot.subsystems.intake.Intake;
 import frc.robot.subsystems.intake.IntakeDeployIO;
 import frc.robot.subsystems.intake.IntakeDeployIOSim;
@@ -67,6 +74,10 @@ public class RobotContainer {
   private final Drive drive;
   private final Vision vision;
   private final Intake intake;
+  private final Indexer indexer;
+
+  // Set to false to use no-op IO when indexer hardware is not connected
+  private static final boolean indexerEnabled = true;
 
   // Controllers
   private final CommandXboxController drv = new CommandXboxController(0);
@@ -105,6 +116,12 @@ public class RobotContainer {
         // Intake with TalonFX hardware
         intake = new Intake(new IntakeDeployIOTalonFX(), new IntakeRollerIOTalonFX());
 
+        // Indexer with TalonFX hardware (no-op IO when disabled)
+        indexer =
+            indexerEnabled
+                ? new Indexer(new IndexerBeltIOTalonFX(), new IndexerKickerIOTalonFX())
+                : new Indexer(new IndexerBeltIO() {}, new IndexerKickerIO() {});
+
         break;
 
       case SIM:
@@ -121,6 +138,7 @@ public class RobotContainer {
                 drive::addVisionMeasurement,
                 new VisionIOPhotonVisionSim(camera0Name, robotToCamera0, drive::getPose));
         intake = new Intake(new IntakeDeployIOSim(), new IntakeRollerIOSim());
+        indexer = new Indexer(new IndexerBeltIOSim(), new IndexerKickerIOSim());
         break;
 
       default:
@@ -134,6 +152,7 @@ public class RobotContainer {
                 new ModuleIO() {});
         vision = new Vision(drive::addVisionMeasurement, new VisionIO() {});
         intake = new Intake(new IntakeDeployIO() {}, new IntakeRollerIO() {});
+        indexer = new Indexer(new IndexerBeltIO() {}, new IndexerKickerIO() {});
         break;
     }
 
@@ -231,6 +250,9 @@ public class RobotContainer {
     op.a().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
     op.b().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)));
     op.y().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.DEPLOYED_IDLE)));
+
+    // Operator indexer controls
+    op.rightTrigger(0.5).whileTrue(indexer.feedCommand());
   }
 
   // Drive mode helper methods
