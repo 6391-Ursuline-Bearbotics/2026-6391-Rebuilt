@@ -51,6 +51,10 @@ import frc.robot.subsystems.intake.IntakeDeployIOTalonFX;
 import frc.robot.subsystems.intake.IntakeRollerIO;
 import frc.robot.subsystems.intake.IntakeRollerIOSim;
 import frc.robot.subsystems.intake.IntakeRollerIOTalonFX;
+import frc.robot.subsystems.shooter.Shooter;
+import frc.robot.subsystems.shooter.ShooterIO;
+import frc.robot.subsystems.shooter.ShooterIOSim;
+import frc.robot.subsystems.shooter.ShooterIOTalonFX;
 import frc.robot.subsystems.vision.Vision;
 import frc.robot.subsystems.vision.VisionIO;
 import frc.robot.subsystems.vision.VisionIOLimelight;
@@ -75,9 +79,11 @@ public class RobotContainer {
   private final Vision vision;
   private final Intake intake;
   private final Indexer indexer;
+  private final Shooter shooter;
 
-  // Set to false to use no-op IO when indexer hardware is not connected
+  // Set to false to use no-op IO when hardware is not connected
   private static final boolean indexerEnabled = true;
+  private static final boolean shooterEnabled = true;
 
   // Controllers
   private final CommandXboxController drv = new CommandXboxController(0);
@@ -122,6 +128,12 @@ public class RobotContainer {
                 ? new Indexer(new IndexerBeltIOTalonFX(), new IndexerKickerIOTalonFX())
                 : new Indexer(new IndexerBeltIO() {}, new IndexerKickerIO() {});
 
+        // Shooter with TalonFX hardware (no-op IO when disabled)
+        shooter =
+            shooterEnabled
+                ? new Shooter(new ShooterIOTalonFX(), drive::getPose, drive::getFieldRelativeSpeeds)
+                : new Shooter(new ShooterIO() {}, drive::getPose, drive::getFieldRelativeSpeeds);
+
         break;
 
       case SIM:
@@ -139,6 +151,7 @@ public class RobotContainer {
                 new VisionIOPhotonVisionSim(camera0Name, robotToCamera0, drive::getPose));
         intake = new Intake(new IntakeDeployIOSim(), new IntakeRollerIOSim());
         indexer = new Indexer(new IndexerBeltIOSim(), new IndexerKickerIOSim());
+        shooter = new Shooter(new ShooterIOSim(), drive::getPose, drive::getFieldRelativeSpeeds);
         break;
 
       default:
@@ -153,6 +166,7 @@ public class RobotContainer {
         vision = new Vision(drive::addVisionMeasurement, new VisionIO() {});
         intake = new Intake(new IntakeDeployIO() {}, new IntakeRollerIO() {});
         indexer = new Indexer(new IndexerBeltIO() {}, new IndexerKickerIO() {});
+        shooter = new Shooter(new ShooterIO() {}, drive::getPose, drive::getFieldRelativeSpeeds);
         break;
     }
 
