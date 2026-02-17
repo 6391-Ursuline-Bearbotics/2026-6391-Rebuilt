@@ -250,7 +250,7 @@ public class Drive extends SubsystemBase {
    */
   public void runVelocity(ChassisSpeeds speeds) {
     // Heading correction: hold heading when no rotation is commanded
-    if (Math.abs(speeds.omegaRadiansPerSecond) < 0.05) {
+    /* if (Math.abs(speeds.omegaRadiansPerSecond) < 0.05) {
       if (headingTarget == null) {
         headingTarget = getRotation();
       }
@@ -259,7 +259,7 @@ public class Drive extends SubsystemBase {
               getRotation().getRadians(), headingTarget.getRadians());
     } else {
       headingTarget = null;
-    }
+    } */
 
     // Calculate module setpoints
     ChassisSpeeds discreteSpeeds = ChassisSpeeds.discretize(speeds, 0.02);

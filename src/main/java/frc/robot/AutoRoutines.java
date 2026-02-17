@@ -42,4 +42,16 @@ public class AutoRoutines {
 
     return routine;
   }
+
+  public AutoRoutine depotInside() {
+    AutoRoutine routine = factory.newRoutine("Depot Inside");
+
+    // Load the routine's trajectories
+    AutoTrajectory depotCycle = routine.trajectory("DepotInside");
+
+    // When the routine begins, reset odometry and start the first trajectory (1)
+    routine.active().onTrue(Commands.sequence(depotCycle.resetOdometry(), depotCycle.cmd()));
+
+    return routine;
+  }
 }

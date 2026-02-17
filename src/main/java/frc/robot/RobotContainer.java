@@ -147,6 +147,7 @@ public class RobotContainer {
     // Auto routines
     autoChooser.addRoutine("Reset Odometry Start", autoRoutines::resetOdometryStart);
     autoChooser.addRoutine("Depot Cycle", autoRoutines::depotCycle);
+    autoChooser.addRoutine("Depot Inside", autoRoutines::depotInside);
 
     // Set up SysId routines
     autoChooser.addCmd(
