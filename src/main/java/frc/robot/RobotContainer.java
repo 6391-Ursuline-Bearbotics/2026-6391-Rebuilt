@@ -37,6 +37,13 @@ import frc.robot.subsystems.drive.GyroIOPigeon2;
 import frc.robot.subsystems.drive.ModuleIO;
 import frc.robot.subsystems.drive.ModuleIOSim;
 import frc.robot.subsystems.drive.ModuleIOTalonFX;
+import frc.robot.subsystems.indexer.Indexer;
+import frc.robot.subsystems.indexer.IndexerBeltIO;
+import frc.robot.subsystems.indexer.IndexerBeltIOSim;
+import frc.robot.subsystems.indexer.IndexerBeltIOTalonFX;
+import frc.robot.subsystems.indexer.IndexerKickerIO;
+import frc.robot.subsystems.indexer.IndexerKickerIOSim;
+import frc.robot.subsystems.indexer.IndexerKickerIOTalonFX;
 import frc.robot.subsystems.intake.Intake;
 import frc.robot.subsystems.intake.IntakeDeployIO;
 import frc.robot.subsystems.intake.IntakeDeployIOSim;
@@ -44,6 +51,10 @@ import frc.robot.subsystems.intake.IntakeDeployIOTalonFX;
 import frc.robot.subsystems.intake.IntakeRollerIO;
 import frc.robot.subsystems.intake.IntakeRollerIOSim;
 import frc.robot.subsystems.intake.IntakeRollerIOTalonFX;
+import frc.robot.subsystems.shooter.Shooter;
+import frc.robot.subsystems.shooter.ShooterIO;
+import frc.robot.subsystems.shooter.ShooterIOSim;
+import frc.robot.subsystems.shooter.ShooterIOTalonFX;
 import frc.robot.subsystems.vision.Vision;
 import frc.robot.subsystems.vision.VisionIO;
 import frc.robot.subsystems.vision.VisionIOLimelight;
@@ -67,6 +78,12 @@ public class RobotContainer {
   private final Drive drive;
   private final Vision vision;
   private final Intake intake;
+  private final Indexer indexer;
+  private final Shooter shooter;
+
+  // Set to false to use no-op IO when hardware is not connected
+  private static final boolean indexerEnabled = true;
+  private static final boolean shooterEnabled = true;
 
   // Controllers
   private final CommandXboxController drv = new CommandXboxController(0);
@@ -105,6 +122,18 @@ public class RobotContainer {
         // Intake with TalonFX hardware
         intake = new Intake(new IntakeDeployIOTalonFX(), new IntakeRollerIOTalonFX());
 
+        // Indexer with TalonFX hardware (no-op IO when disabled)
+        indexer =
+            indexerEnabled
+                ? new Indexer(new IndexerBeltIOTalonFX(), new IndexerKickerIOTalonFX())
+                : new Indexer(new IndexerBeltIO() {}, new IndexerKickerIO() {});
+
+        // Shooter with TalonFX hardware (no-op IO when disabled)
+        shooter =
+            shooterEnabled
+                ? new Shooter(new ShooterIOTalonFX(), drive::getPose, drive::getFieldRelativeSpeeds)
+                : new Shooter(new ShooterIO() {}, drive::getPose, drive::getFieldRelativeSpeeds);
+
         break;
 
       case SIM:
@@ -121,6 +150,8 @@ public class RobotContainer {
                 drive::addVisionMeasurement,
                 new VisionIOPhotonVisionSim(camera0Name, robotToCamera0, drive::getPose));
         intake = new Intake(new IntakeDeployIOSim(), new IntakeRollerIOSim());
+        indexer = new Indexer(new IndexerBeltIOSim(), new IndexerKickerIOSim());
+        shooter = new Shooter(new ShooterIOSim(), drive::getPose, drive::getFieldRelativeSpeeds);
         break;
 
       default:
@@ -134,6 +165,8 @@ public class RobotContainer {
                 new ModuleIO() {});
         vision = new Vision(drive::addVisionMeasurement, new VisionIO() {});
         intake = new Intake(new IntakeDeployIO() {}, new IntakeRollerIO() {});
+        indexer = new Indexer(new IndexerBeltIO() {}, new IndexerKickerIO() {});
+        shooter = new Shooter(new ShooterIO() {}, drive::getPose, drive::getFieldRelativeSpeeds);
         break;
     }
 
@@ -232,6 +265,9 @@ public class RobotContainer {
     op.a().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
     op.b().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)));
     op.y().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.DEPLOYED_IDLE)));
+
+    // Operator indexer controls
+    op.rightTrigger(0.5).whileTrue(indexer.feedCommand());
   }
 
   // Drive mode helper methods
