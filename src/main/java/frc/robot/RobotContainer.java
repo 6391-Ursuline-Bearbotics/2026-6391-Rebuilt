@@ -200,6 +200,8 @@ public class RobotContainer {
         "Drive SysId (Dynamic Forward)", () -> drive.sysIdDynamic(SysIdRoutine.Direction.kForward));
     autoChooser.addCmd(
         "Drive SysId (Dynamic Reverse)", () -> drive.sysIdDynamic(SysIdRoutine.Direction.kReverse));
+    autoChooser.addCmd(
+        "Intake Roller FF Characterization", () -> Intake.rollerFFCharacterization(intake));
 
     // Configure the button bindings
     configureButtonBindings();

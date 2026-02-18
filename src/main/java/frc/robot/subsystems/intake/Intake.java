@@ -10,6 +10,10 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants;
 import frc.robot.Constants.Mode;
 import frc.robot.util.LoggedTunableNumber;
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
+import java.util.LinkedList;
+import java.util.List;
 import org.littletonrobotics.junction.AutoLogOutput;
 import org.littletonrobotics.junction.Logger;
 
@@ -106,8 +110,19 @@ public class Intake extends SubsystemBase {
     return deployState == DeployState.RETRACTED;
   }
 
+  @AutoLogOutput(key = "Intake/RollerVelocityRPM")
   public double getRollerVelocityRPM() {
     return rollerInputs.velocityRadPerSec * 60.0 / (2.0 * Math.PI);
+  }
+
+  /** Run roller at raw voltage for characterization. */
+  public void runRollerCharacterization(double volts) {
+    rollerIO.setVoltage(volts);
+  }
+
+  /** Get roller velocity in rad/s for characterization. */
+  public double getRollerCharacterizationVelocity() {
+    return rollerInputs.velocityRadPerSec;
   }
 
   @Override
@@ -243,5 +258,67 @@ public class Intake extends SubsystemBase {
   public Command ejectCommand() {
     return Commands.startEnd(() -> setGoal(Goal.EJECT), () -> setGoal(Goal.IDLE), this)
         .withName("Eject");
+  }
+
+  /**
+   * Ramps voltage on the roller motor and collects velocity/voltage samples, then calculates kS and
+   * kV via linear regression. Run from the auto chooser, cancel to see results.
+   */
+  public static Command rollerFFCharacterization(Intake intake) {
+    double rampRate = 0.5; // Volts per second
+    double startDelay = 1.0; // Seconds to let deploy settle
+    List<Double> velocitySamples = new LinkedList<>();
+    List<Double> voltageSamples = new LinkedList<>();
+    Timer timer = new Timer();
+
+    return Commands.sequence(
+        // Deploy the intake first and wait for it to settle
+        Commands.runOnce(() -> intake.setGoal(Goal.DEPLOYED_IDLE)),
+        Commands.waitSeconds(startDelay),
+
+        // Reset data
+        Commands.runOnce(
+            () -> {
+              velocitySamples.clear();
+              voltageSamples.clear();
+            }),
+
+        // Start timer
+        Commands.runOnce(timer::restart),
+
+        // Ramp voltage and collect samples
+        Commands.run(
+                () -> {
+                  double voltage = timer.get() * rampRate;
+                  intake.runRollerCharacterization(voltage);
+                  velocitySamples.add(intake.getRollerCharacterizationVelocity());
+                  voltageSamples.add(voltage);
+                },
+                intake)
+            .finallyDo(
+                () -> {
+                  intake.runRollerCharacterization(0.0);
+                  intake.setGoal(Goal.IDLE);
+
+                  int n = velocitySamples.size();
+                  double sumX = 0.0;
+                  double sumY = 0.0;
+                  double sumXY = 0.0;
+                  double sumX2 = 0.0;
+                  for (int i = 0; i < n; i++) {
+                    sumX += velocitySamples.get(i);
+                    sumY += voltageSamples.get(i);
+                    sumXY += velocitySamples.get(i) * voltageSamples.get(i);
+                    sumX2 += velocitySamples.get(i) * velocitySamples.get(i);
+                  }
+                  double kS = (sumY * sumX2 - sumX * sumXY) / (n * sumX2 - sumX * sumX);
+                  double kV = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+
+                  NumberFormat formatter = new DecimalFormat("#0.00000");
+                  System.out.println(
+                      "********** Intake Roller FF Characterization Results **********");
+                  System.out.println("\tkS: " + formatter.format(kS));
+                  System.out.println("\tkV: " + formatter.format(kV));
+                }));
   }
 }
