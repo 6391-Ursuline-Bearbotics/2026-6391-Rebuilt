@@ -20,7 +20,7 @@ public final class IntakeConstants {
 
   // Roller motor
   public static final double rollerGearRatio = 1.0;
-  public static final boolean rollerMotorInverted = true;
+  public static final boolean rollerMotorInverted = false;
   public static final double rollerIntakeVelocityRPM = 3500.0;
   public static final double rollerEjectVelocityRPM = -3500.0;
   public static final double rollerStatorCurrentLimit = 80.0;
