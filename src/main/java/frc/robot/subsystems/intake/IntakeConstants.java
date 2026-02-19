@@ -20,9 +20,9 @@ public final class IntakeConstants {
 
   // Roller motor
   public static final double rollerGearRatio = 1.0;
-  public static final boolean rollerMotorInverted = false;
-  public static final double rollerIntakeVelocityRPM = 3500.0;
-  public static final double rollerEjectVelocityRPM = -3500.0;
+  public static final boolean rollerMotorInverted = true;
+  public static final double rollerIntakeVelocityRPM = 5000.0;
+  public static final double rollerEjectVelocityRPM = -5000.0;
   public static final double rollerStatorCurrentLimit = 80.0;
   public static final Slot0Configs rollerGains =
       new Slot0Configs().withKP(0.1).withKV(0.12).withKS(0.0);
