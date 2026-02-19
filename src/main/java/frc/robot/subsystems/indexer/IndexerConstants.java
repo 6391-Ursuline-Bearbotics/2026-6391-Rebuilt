@@ -6,7 +6,7 @@ import com.ctre.phoenix6.configs.Slot0Configs;
 public final class IndexerConstants {
   // CAN IDs
   public static final int beltMotorId = 5;
-  public static final int kickerMotorId = 5; // for can errors - change back to 6
+  public static final int kickerMotorId = 6;
   public static final CANBus canBus = new CANBus("");
 
   // Belt motor

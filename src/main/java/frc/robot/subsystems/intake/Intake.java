@@ -20,11 +20,11 @@ import org.littletonrobotics.junction.Logger;
 public class Intake extends SubsystemBase {
   // Tunable roller gains
   private static final LoggedTunableNumber rollerKp =
-      new LoggedTunableNumber("Intake/Roller/kP", 0.1);
+      new LoggedTunableNumber("Intake/Roller/kP", 0.6);
   private static final LoggedTunableNumber rollerKv =
-      new LoggedTunableNumber("Intake/Roller/kV", 0.12);
+      new LoggedTunableNumber("Intake/Roller/kV", 0.119);
   private static final LoggedTunableNumber rollerKs =
-      new LoggedTunableNumber("Intake/Roller/kS", 0.0);
+      new LoggedTunableNumber("Intake/Roller/kS", 0.24691);
 
   // Tunable roller velocity setpoints
   private static final LoggedTunableNumber rollerIntakeRPM =
