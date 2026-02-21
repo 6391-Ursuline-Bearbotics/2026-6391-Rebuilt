@@ -82,7 +82,7 @@ public class RobotContainer {
   private final Shooter shooter;
 
   // Set to false to use no-op IO when hardware is not connected
-  private static final boolean indexerEnabled = false;
+  private static final boolean indexerEnabled = true;
   private static final boolean shooterEnabled = false;
 
   // Controllers

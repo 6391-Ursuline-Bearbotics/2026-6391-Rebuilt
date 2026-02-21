@@ -11,10 +11,10 @@ public final class IndexerConstants {
 
   // Belt motor
   public static final double beltGearRatio = 1.0;
-  public static final boolean beltMotorInverted = false;
+  public static final boolean beltMotorInverted = true;
   public static final double beltStatorCurrentLimit = 80.0;
-  public static final double beltFeedVelocityRPM = 3000.0;
-  public static final double beltEjectVelocityRPM = -3000.0;
+  public static final double beltFeedVelocityRPM = 2000.0;
+  public static final double beltEjectVelocityRPM = -2000.0;
   public static final Slot0Configs beltGains =
       new Slot0Configs().withKP(0.1).withKV(0.12).withKS(0.0);
 
@@ -22,8 +22,8 @@ public final class IndexerConstants {
   public static final double kickerGearRatio = 1.0;
   public static final boolean kickerMotorInverted = false;
   public static final double kickerStatorCurrentLimit = 80.0;
-  public static final double kickerFeedVelocityRPM = 4000.0;
-  public static final double kickerEjectVelocityRPM = -4000.0;
+  public static final double kickerFeedVelocityRPM = 2000.0;
+  public static final double kickerEjectVelocityRPM = -2000.0;
   public static final Slot0Configs kickerGains =
       new Slot0Configs().withKP(0.1).withKV(0.12).withKS(0.0);
 
