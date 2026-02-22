@@ -268,6 +268,19 @@ public class RobotContainer {
     op.b().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)));
     op.y().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.DEPLOYED_IDLE)));
 
+    // Driver clump intake mode (left trigger held)
+    drv.leftTrigger(0.5)
+        .whileTrue(
+            Commands.startEnd(
+                () -> {
+                  intake.setGoal(Intake.Goal.CLUMP_INTAKE);
+                  drive.setMaxSpeedOverride(2.0);
+                },
+                () -> {
+                  intake.setGoal(Intake.Goal.INTAKE);
+                  drive.clearMaxSpeedOverride();
+                }));
+
     // Operator indexer controls
     op.rightTrigger(0.5).whileTrue(indexer.feedCommand());
   }

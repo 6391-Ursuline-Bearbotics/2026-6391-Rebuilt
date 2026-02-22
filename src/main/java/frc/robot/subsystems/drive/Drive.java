@@ -409,9 +409,26 @@ public class Drive extends SubsystemBase {
         visionRobotPoseMeters, timestampSeconds, visionMeasurementStdDevs);
   }
 
+  // Optional speed cap (0 = no override)
+  private double maxSpeedOverrideMetersPerSec = 0.0;
+
+  /** Sets a maximum speed override in meters per sec. */
+  public void setMaxSpeedOverride(double maxSpeedMetersPerSec) {
+    this.maxSpeedOverrideMetersPerSec = maxSpeedMetersPerSec;
+  }
+
+  /** Clears the maximum speed override. */
+  public void clearMaxSpeedOverride() {
+    this.maxSpeedOverrideMetersPerSec = 0.0;
+  }
+
   /** Returns the maximum linear speed in meters per sec. */
   public double getMaxLinearSpeedMetersPerSec() {
-    return TunerConstants.kSpeedAt12Volts.in(MetersPerSecond);
+    double baseSpeed = TunerConstants.kSpeedAt12Volts.in(MetersPerSecond);
+    if (maxSpeedOverrideMetersPerSec > 0.0) {
+      return Math.min(baseSpeed, maxSpeedOverrideMetersPerSec);
+    }
+    return baseSpeed;
   }
 
   /** Returns the maximum angular speed in radians per sec. */

@@ -29,6 +29,9 @@ public class Intake extends SubsystemBase {
   // Tunable roller velocity setpoints
   private static final LoggedTunableNumber rollerIntakeRPM =
       new LoggedTunableNumber("Intake/Roller/IntakeRPM", IntakeConstants.rollerIntakeVelocityRPM);
+  private static final LoggedTunableNumber rollerClumpIntakeRPM =
+      new LoggedTunableNumber(
+          "Intake/Roller/ClumpIntakeRPM", IntakeConstants.rollerClumpIntakeVelocityRPM);
   private static final LoggedTunableNumber rollerEjectRPM =
       new LoggedTunableNumber("Intake/Roller/EjectRPM", IntakeConstants.rollerEjectVelocityRPM);
 
@@ -46,7 +49,8 @@ public class Intake extends SubsystemBase {
     IDLE, // Retracted, rollers off
     INTAKE, // Deployed, rollers spinning inward
     EJECT, // Deployed, rollers spinning outward
-    DEPLOYED_IDLE // Deployed, rollers off
+    DEPLOYED_IDLE, // Deployed, rollers off
+    CLUMP_INTAKE // Deployed, rollers at higher speed for clumps
   }
 
   /** Internal deploy mechanism state. */
@@ -143,7 +147,10 @@ public class Intake extends SubsystemBase {
 
     // Determine if goal wants the intake deployed
     boolean goalWantsDeploy =
-        goal == Goal.INTAKE || goal == Goal.EJECT || goal == Goal.DEPLOYED_IDLE;
+        goal == Goal.INTAKE
+            || goal == Goal.EJECT
+            || goal == Goal.DEPLOYED_IDLE
+            || goal == Goal.CLUMP_INTAKE;
 
     // Current spike detection: ignore inrush, then check threshold
     boolean stallDetected =
@@ -208,6 +215,9 @@ public class Intake extends SubsystemBase {
       switch (goal) {
         case INTAKE:
           rollerIO.setVelocity(rpmToRadPerSec(rollerIntakeRPM.get()));
+          break;
+        case CLUMP_INTAKE:
+          rollerIO.setVelocity(rpmToRadPerSec(rollerClumpIntakeRPM.get()));
           break;
         case EJECT:
           rollerIO.setVelocity(rpmToRadPerSec(rollerEjectRPM.get()));
