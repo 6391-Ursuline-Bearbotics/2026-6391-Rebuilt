@@ -48,6 +48,8 @@ public class Shooter extends SubsystemBase {
   // IO
   private final ShooterIO io;
   private final ShooterIOInputsAutoLogged inputs = new ShooterIOInputsAutoLogged();
+  private final ShooterHoodIO hoodIO;
+  private final ShooterHoodIOInputsAutoLogged hoodInputs = new ShooterHoodIOInputsAutoLogged();
 
   // Pose and speed suppliers from drive
   private final Supplier<Pose2d> poseSupplier;
@@ -55,11 +57,13 @@ public class Shooter extends SubsystemBase {
 
   // Interpolation tables
   private final InterpolatingDoubleTreeMap distanceToRPM;
+  private final InterpolatingDoubleTreeMap distanceToAngle;
   private final InterpolatingDoubleTreeMap distanceToTOF;
 
   // State
   private Goal goal = Goal.IDLE;
   private double commandedRPM = 0.0;
+  private double commandedAngleDeg = ShooterConstants.hoodMinAngleDeg;
   private double distanceToTarget = 0.0;
   private Translation2d aimTarget = Translation2d.kZero;
 
@@ -74,11 +78,16 @@ public class Shooter extends SubsystemBase {
       new Alert("Shooter right motor over temperature.", AlertType.kWarning);
 
   public Shooter(
-      ShooterIO io, Supplier<Pose2d> poseSupplier, Supplier<ChassisSpeeds> fieldSpeedsSupplier) {
+      ShooterIO io,
+      ShooterHoodIO hoodIO,
+      Supplier<Pose2d> poseSupplier,
+      Supplier<ChassisSpeeds> fieldSpeedsSupplier) {
     this.io = io;
+    this.hoodIO = hoodIO;
     this.poseSupplier = poseSupplier;
     this.fieldSpeedsSupplier = fieldSpeedsSupplier;
     this.distanceToRPM = ShooterConstants.createDistanceToRPMMap();
+    this.distanceToAngle = ShooterConstants.createDistanceToAngleMap();
     this.distanceToTOF = ShooterConstants.createDistanceToTOFMap();
   }
 
@@ -94,6 +103,11 @@ public class Shooter extends SubsystemBase {
   @AutoLogOutput(key = "Shooter/CommandedRPM")
   public double getCommandedRPM() {
     return commandedRPM;
+  }
+
+  @AutoLogOutput(key = "Shooter/CommandedAngleDeg")
+  public double getCommandedAngleDeg() {
+    return commandedAngleDeg;
   }
 
   @AutoLogOutput(key = "Shooter/DistanceToTarget")
@@ -123,9 +137,12 @@ public class Shooter extends SubsystemBase {
   public void periodic() {
     io.updateInputs(inputs);
     Logger.processInputs("Shooter", inputs);
+    hoodIO.updateInputs(hoodInputs);
+    Logger.processInputs("Shooter/Hood", hoodInputs);
 
     if (DriverStation.isDisabled()) {
       io.stop();
+      hoodIO.stop();
       updateAlerts();
       return;
     }
@@ -141,15 +158,21 @@ public class Shooter extends SubsystemBase {
     switch (goal) {
       case SHOOT:
         commandedRPM = calculateShootRPM();
+        commandedAngleDeg = distanceToAngle.get(distanceToTarget);
         io.setVelocity(rpmToRadPerSec(commandedRPM));
+        hoodIO.setAngle(commandedAngleDeg);
         break;
       case EJECT:
         commandedRPM = ejectRPM.get();
+        commandedAngleDeg = ShooterConstants.hoodMinAngleDeg;
         io.setVelocity(rpmToRadPerSec(commandedRPM));
+        hoodIO.setAngle(commandedAngleDeg);
         break;
       default:
         commandedRPM = 0.0;
+        commandedAngleDeg = ShooterConstants.hoodMinAngleDeg;
         io.stop();
+        hoodIO.setAngle(commandedAngleDeg);
         break;
     }
 

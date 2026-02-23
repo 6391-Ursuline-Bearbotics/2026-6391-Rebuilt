@@ -27,6 +27,12 @@ public final class ShooterConstants {
   // Shoot-on-the-move
   public static final int shotCompensationIterations = 3;
 
+  // Hood servos (PWM ports - placeholder, update when wired)
+  public static final int hoodLeftServoPWM = 0;
+  public static final int hoodRightServoPWM = 1;
+  public static final double hoodMinAngleDeg = 20.0;
+  public static final double hoodMaxAngleDeg = 45.0;
+
   // Simulation
   public static final double simMOI = 0.001;
 
@@ -44,6 +50,23 @@ public final class ShooterConstants {
     map.put(5.0, 5000.0);
     map.put(6.0, 5500.0);
     map.put(7.0, 6000.0);
+    return map;
+  }
+
+  /**
+   * Distance (meters) -> Hood angle (degrees) interpolation table. Populate with empirical data
+   * from testing. Values below are placeholders.
+   */
+  public static InterpolatingDoubleTreeMap createDistanceToAngleMap() {
+    var map = new InterpolatingDoubleTreeMap();
+    // TODO: Replace with real measured data
+    map.put(1.0, 20.0);
+    map.put(2.0, 23.0);
+    map.put(3.0, 27.0);
+    map.put(4.0, 31.0);
+    map.put(5.0, 36.0);
+    map.put(6.0, 40.0);
+    map.put(7.0, 45.0);
     return map;
   }
 

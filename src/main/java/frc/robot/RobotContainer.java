@@ -52,6 +52,9 @@ import frc.robot.subsystems.intake.IntakeRollerIO;
 import frc.robot.subsystems.intake.IntakeRollerIOSim;
 import frc.robot.subsystems.intake.IntakeRollerIOTalonFX;
 import frc.robot.subsystems.shooter.Shooter;
+import frc.robot.subsystems.shooter.ShooterHoodIO;
+import frc.robot.subsystems.shooter.ShooterHoodIOServo;
+import frc.robot.subsystems.shooter.ShooterHoodIOSim;
 import frc.robot.subsystems.shooter.ShooterIO;
 import frc.robot.subsystems.shooter.ShooterIOSim;
 import frc.robot.subsystems.shooter.ShooterIOTalonFX;
@@ -131,8 +134,16 @@ public class RobotContainer {
         // Shooter with TalonFX hardware (no-op IO when disabled)
         shooter =
             shooterEnabled
-                ? new Shooter(new ShooterIOTalonFX(), drive::getPose, drive::getFieldRelativeSpeeds)
-                : new Shooter(new ShooterIO() {}, drive::getPose, drive::getFieldRelativeSpeeds);
+                ? new Shooter(
+                    new ShooterIOTalonFX(),
+                    new ShooterHoodIOServo(),
+                    drive::getPose,
+                    drive::getFieldRelativeSpeeds)
+                : new Shooter(
+                    new ShooterIO() {},
+                    new ShooterHoodIO() {},
+                    drive::getPose,
+                    drive::getFieldRelativeSpeeds);
 
         break;
 
@@ -151,7 +162,12 @@ public class RobotContainer {
                 new VisionIOPhotonVisionSim(camera0Name, robotToCamera0, drive::getPose));
         intake = new Intake(new IntakeDeployIOSim(), new IntakeRollerIOSim());
         indexer = new Indexer(new IndexerBeltIOSim(), new IndexerKickerIOSim());
-        shooter = new Shooter(new ShooterIOSim(), drive::getPose, drive::getFieldRelativeSpeeds);
+        shooter =
+            new Shooter(
+                new ShooterIOSim(),
+                new ShooterHoodIOSim(),
+                drive::getPose,
+                drive::getFieldRelativeSpeeds);
         break;
 
       default:
@@ -166,7 +182,12 @@ public class RobotContainer {
         vision = new Vision(drive::addVisionMeasurement, new VisionIO() {});
         intake = new Intake(new IntakeDeployIO() {}, new IntakeRollerIO() {});
         indexer = new Indexer(new IndexerBeltIO() {}, new IndexerKickerIO() {});
-        shooter = new Shooter(new ShooterIO() {}, drive::getPose, drive::getFieldRelativeSpeeds);
+        shooter =
+            new Shooter(
+                new ShooterIO() {},
+                new ShooterHoodIO() {},
+                drive::getPose,
+                drive::getFieldRelativeSpeeds);
         break;
     }
 
