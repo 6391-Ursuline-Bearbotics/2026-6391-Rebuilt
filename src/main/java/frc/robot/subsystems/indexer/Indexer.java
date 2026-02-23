@@ -1,5 +1,6 @@
 package frc.robot.subsystems.indexer;
 
+import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.wpilibj.Alert;
 import edu.wpi.first.wpilibj.Alert.AlertType;
 import edu.wpi.first.wpilibj.DriverStation;
@@ -8,7 +9,9 @@ import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants;
 import frc.robot.Constants.Mode;
+import frc.robot.GameData;
 import frc.robot.util.LoggedTunableNumber;
+import java.util.function.Supplier;
 import org.littletonrobotics.junction.AutoLogOutput;
 import org.littletonrobotics.junction.Logger;
 
@@ -50,6 +53,9 @@ public class Indexer extends SubsystemBase {
   private final IndexerKickerIOInputsAutoLogged kickerInputs =
       new IndexerKickerIOInputsAutoLogged();
 
+  // Pose supplier for game data gating
+  private final Supplier<Pose2d> poseSupplier;
+
   // State
   private Goal goal = Goal.IDLE;
 
@@ -63,9 +69,10 @@ public class Indexer extends SubsystemBase {
   private final Alert kickerOverTempAlert =
       new Alert("Indexer kicker motor over temperature.", AlertType.kWarning);
 
-  public Indexer(IndexerBeltIO beltIO, IndexerKickerIO kickerIO) {
+  public Indexer(IndexerBeltIO beltIO, IndexerKickerIO kickerIO, Supplier<Pose2d> poseSupplier) {
     this.beltIO = beltIO;
     this.kickerIO = kickerIO;
+    this.poseSupplier = poseSupplier;
   }
 
   public void setGoal(Goal goal) {
@@ -112,8 +119,13 @@ public class Indexer extends SubsystemBase {
     // Motor control based on goal
     switch (goal) {
       case FEED:
-        beltIO.setVelocity(rpmToRadPerSec(beltFeedRPM.get()));
-        kickerIO.setVelocity(rpmToRadPerSec(kickerFeedRPM.get()));
+        if (GameData.canFeed(poseSupplier.get().getTranslation())) {
+          beltIO.setVelocity(rpmToRadPerSec(beltFeedRPM.get()));
+          kickerIO.setVelocity(rpmToRadPerSec(kickerFeedRPM.get()));
+        } else {
+          beltIO.stop();
+          kickerIO.stop();
+        }
         break;
       case EJECT:
         beltIO.setVelocity(rpmToRadPerSec(beltEjectRPM.get()));

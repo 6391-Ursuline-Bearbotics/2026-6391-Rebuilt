@@ -128,8 +128,9 @@ public class RobotContainer {
         // Indexer with TalonFX hardware (no-op IO when disabled)
         indexer =
             indexerEnabled
-                ? new Indexer(new IndexerBeltIOTalonFX(), new IndexerKickerIOTalonFX())
-                : new Indexer(new IndexerBeltIO() {}, new IndexerKickerIO() {});
+                ? new Indexer(
+                    new IndexerBeltIOTalonFX(), new IndexerKickerIOTalonFX(), drive::getPose)
+                : new Indexer(new IndexerBeltIO() {}, new IndexerKickerIO() {}, drive::getPose);
 
         // Shooter with TalonFX hardware (no-op IO when disabled)
         shooter =
@@ -161,7 +162,7 @@ public class RobotContainer {
                 drive::addVisionMeasurement,
                 new VisionIOPhotonVisionSim(camera0Name, robotToCamera0, drive::getPose));
         intake = new Intake(new IntakeDeployIOSim(), new IntakeRollerIOSim());
-        indexer = new Indexer(new IndexerBeltIOSim(), new IndexerKickerIOSim());
+        indexer = new Indexer(new IndexerBeltIOSim(), new IndexerKickerIOSim(), drive::getPose);
         shooter =
             new Shooter(
                 new ShooterIOSim(),
@@ -181,7 +182,7 @@ public class RobotContainer {
                 new ModuleIO() {});
         vision = new Vision(drive::addVisionMeasurement, new VisionIO() {});
         intake = new Intake(new IntakeDeployIO() {}, new IntakeRollerIO() {});
-        indexer = new Indexer(new IndexerBeltIO() {}, new IndexerKickerIO() {});
+        indexer = new Indexer(new IndexerBeltIO() {}, new IndexerKickerIO() {}, drive::getPose);
         shooter =
             new Shooter(
                 new ShooterIO() {},

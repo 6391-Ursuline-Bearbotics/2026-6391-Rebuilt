@@ -14,6 +14,7 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants;
 import frc.robot.Constants.Mode;
 import frc.robot.FieldConstants;
+import frc.robot.GameData;
 import frc.robot.util.LoggedTunableNumber;
 import java.util.function.Supplier;
 import org.littletonrobotics.junction.AutoLogOutput;
@@ -159,8 +160,15 @@ public class Shooter extends SubsystemBase {
       case SHOOT:
         commandedRPM = calculateShootRPM();
         commandedAngleDeg = distanceToAngle.get(distanceToTarget);
-        io.setVelocity(rpmToRadPerSec(commandedRPM));
-        hoodIO.setAngle(commandedAngleDeg);
+        if (GameData.canSpinUp(poseSupplier.get().getTranslation())) {
+          io.setVelocity(rpmToRadPerSec(commandedRPM));
+          hoodIO.setAngle(commandedAngleDeg);
+        } else {
+          commandedRPM = 0.0;
+          commandedAngleDeg = ShooterConstants.hoodMinAngleDeg;
+          io.stop();
+          hoodIO.setAngle(commandedAngleDeg);
+        }
         break;
       case EJECT:
         commandedRPM = ejectRPM.get();
@@ -176,9 +184,10 @@ public class Shooter extends SubsystemBase {
         break;
     }
 
-    // Log the aim target for visualization
+    // Log the aim target and hub status for visualization
     Logger.recordOutput(
         "Shooter/AimTarget", new Pose2d(aimTarget, poseSupplier.get().getRotation()));
+    Logger.recordOutput("Shooter/HubActive", GameData.isHubActive());
 
     updateAlerts();
   }
