@@ -195,7 +195,7 @@ public class RobotContainer {
     // Set up Choreo auto factory, routines, and chooser
     autoFactory =
         new AutoFactory(drive::getPose, drive::setPose, drive::followTrajectory, true, drive);
-    autoRoutines = new AutoRoutines(autoFactory, drive);
+    autoRoutines = new AutoRoutines(autoFactory, drive, intake, indexer, shooter);
     autoChooser = new AutoChooser();
     SmartDashboard.putData("Auto Choices", autoChooser);
 
@@ -203,6 +203,8 @@ public class RobotContainer {
     autoChooser.addRoutine("Reset Odometry Start", autoRoutines::resetOdometryStart);
     autoChooser.addRoutine("Depot Cycle", autoRoutines::depotCycle);
     autoChooser.addRoutine("Depot Inside", autoRoutines::depotInside);
+    autoChooser.addRoutine("Outpost Double Pass", autoRoutines::outpostDoublePass);
+    autoChooser.addRoutine("Depot Double Pass", autoRoutines::depotDoublePass);
 
     // Set up SysId routines
     autoChooser.addCmd(
