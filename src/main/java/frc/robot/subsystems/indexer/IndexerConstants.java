@@ -20,7 +20,7 @@ public final class IndexerConstants {
 
   // Kicker motor
   public static final double kickerGearRatio = 1.0;
-  public static final boolean kickerMotorInverted = false;
+  public static final boolean kickerMotorInverted = true;
   public static final double kickerStatorCurrentLimit = 80.0;
   public static final double kickerFeedVelocityRPM = 2000.0;
   public static final double kickerEjectVelocityRPM = -2000.0;
