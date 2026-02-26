@@ -226,6 +226,8 @@ public class RobotContainer {
         "Drive SysId (Dynamic Reverse)", () -> drive.sysIdDynamic(SysIdRoutine.Direction.kReverse));
     autoChooser.addCmd(
         "Intake Roller FF Characterization", () -> Intake.rollerFFCharacterization(intake));
+    autoChooser.addCmd(
+        "Shooter FF Characterization", () -> Shooter.shooterFFCharacterization(shooter));
 
     // Configure the button bindings
     configureButtonBindings();
@@ -307,6 +309,21 @@ public class RobotContainer {
 
     // Operator indexer controls
     op.rightTrigger(0.5).whileTrue(indexer.feedCommand());
+
+    // --- Temporary shooter testing controls ---
+    // Left bumper: Spin up shooter (toggle on)
+    op.leftBumper().onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)));
+
+    // Right bumper: Stop shooter (toggle off)
+    op.rightBumper().onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.IDLE)));
+
+    // Left trigger: Feed gated by isAtSetpoint (hold)
+    op.leftTrigger(0.5)
+        .whileTrue(
+            Commands.startEnd(
+                    () -> indexer.setGoal(Indexer.Goal.FEED),
+                    () -> indexer.setGoal(Indexer.Goal.IDLE))
+                .onlyWhile(shooter::isAtSetpoint));
   }
 
   // Drive mode helper methods

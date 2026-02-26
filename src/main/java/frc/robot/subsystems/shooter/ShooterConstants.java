@@ -12,8 +12,8 @@ public final class ShooterConstants {
 
   // Motor configuration
   public static final double gearRatio = 1.0;
-  public static final boolean leftMotorInverted = false;
-  public static final boolean rightMotorInverted = true; // Mirrors left
+  public static final boolean leftMotorInverted = true;
+  public static final boolean rightMotorInverted = false; // Mirrors left
   public static final double statorCurrentLimit = 80.0;
   public static final Slot0Configs gains = new Slot0Configs().withKP(0.1).withKV(0.12).withKS(0.0);
 

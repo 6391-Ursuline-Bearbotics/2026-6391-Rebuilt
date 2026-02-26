@@ -8,6 +8,7 @@ import edu.wpi.first.wpilibj.Alert;
 import edu.wpi.first.wpilibj.Alert.AlertType;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
@@ -16,6 +17,10 @@ import frc.robot.Constants.Mode;
 import frc.robot.FieldConstants;
 import frc.robot.GameData;
 import frc.robot.util.LoggedTunableNumber;
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.function.Supplier;
 import org.littletonrobotics.junction.AutoLogOutput;
 import org.littletonrobotics.junction.Logger;
@@ -276,5 +281,70 @@ public class Shooter extends SubsystemBase {
   public Command ejectCommand() {
     return Commands.startEnd(() -> setGoal(Goal.EJECT), () -> setGoal(Goal.IDLE), this)
         .withName("Shooter Eject");
+  }
+
+  /** Run shooter motors at a raw voltage for characterization. Bypasses goal logic. */
+  public void runCharacterization(double volts) {
+    io.setVoltage(volts);
+  }
+
+  /** Returns the average velocity of both shooter motors in rad/s for characterization. */
+  public double getCharacterizationVelocity() {
+    return (inputs.leftVelocityRadPerSec + inputs.rightVelocityRadPerSec) / 2.0;
+  }
+
+  /**
+   * Ramps voltage on the shooter motors and collects velocity/voltage samples, then calculates kS
+   * and kV via linear regression. Run from the auto chooser, cancel to see results.
+   */
+  public static Command shooterFFCharacterization(Shooter shooter) {
+    double rampRate = 0.25; // Volts per second (slower for high-inertia flywheel)
+    List<Double> velocitySamples = new LinkedList<>();
+    List<Double> voltageSamples = new LinkedList<>();
+    Timer timer = new Timer();
+
+    return Commands.sequence(
+        // Reset data
+        Commands.runOnce(
+            () -> {
+              velocitySamples.clear();
+              voltageSamples.clear();
+            }),
+
+        // Start timer
+        Commands.runOnce(timer::restart),
+
+        // Ramp voltage and collect samples
+        Commands.run(
+                () -> {
+                  double voltage = timer.get() * rampRate;
+                  shooter.runCharacterization(voltage);
+                  velocitySamples.add(shooter.getCharacterizationVelocity());
+                  voltageSamples.add(voltage);
+                },
+                shooter)
+            .finallyDo(
+                () -> {
+                  shooter.runCharacterization(0.0);
+
+                  int n = velocitySamples.size();
+                  double sumX = 0.0;
+                  double sumY = 0.0;
+                  double sumXY = 0.0;
+                  double sumX2 = 0.0;
+                  for (int i = 0; i < n; i++) {
+                    sumX += velocitySamples.get(i);
+                    sumY += voltageSamples.get(i);
+                    sumXY += velocitySamples.get(i) * voltageSamples.get(i);
+                    sumX2 += velocitySamples.get(i) * velocitySamples.get(i);
+                  }
+                  double kS = (sumY * sumX2 - sumX * sumXY) / (n * sumX2 - sumX * sumX);
+                  double kV = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+
+                  NumberFormat formatter = new DecimalFormat("#0.00000");
+                  System.out.println("********** Shooter FF Characterization Results **********");
+                  System.out.println("\tkS: " + formatter.format(kS));
+                  System.out.println("\tkV: " + formatter.format(kV));
+                }));
   }
 }
