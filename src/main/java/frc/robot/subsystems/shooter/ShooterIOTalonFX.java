@@ -6,6 +6,8 @@ import com.ctre.phoenix6.BaseStatusSignal;
 import com.ctre.phoenix6.StatusSignal;
 import com.ctre.phoenix6.configs.Slot0Configs;
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
+import com.ctre.phoenix6.configs.TorqueCurrentConfigs;
+import com.ctre.phoenix6.controls.VelocityTorqueCurrentFOC;
 import com.ctre.phoenix6.controls.VelocityVoltage;
 import com.ctre.phoenix6.controls.VoltageOut;
 import com.ctre.phoenix6.hardware.ParentDevice;
@@ -25,6 +27,8 @@ public class ShooterIOTalonFX implements ShooterIO {
 
   private final VoltageOut voltageRequest = new VoltageOut(0);
   private final VelocityVoltage velocityRequest = new VelocityVoltage(0.0);
+  private final VelocityTorqueCurrentFOC velocityFOCRequest =
+      new VelocityTorqueCurrentFOC(0.0).withSlot(1);
 
   // Left motor signals
   private final StatusSignal<AngularVelocity> leftVelocity;
@@ -57,9 +61,12 @@ public class ShooterIOTalonFX implements ShooterIO {
             ? InvertedValue.Clockwise_Positive
             : InvertedValue.CounterClockwise_Positive;
     leftConfig.Slot0 = ShooterConstants.gains;
+    leftConfig.Slot1.kP = ShooterConstants.bangBangKp;
     leftConfig.Feedback.SensorToMechanismRatio = ShooterConstants.gearRatio;
     leftConfig.CurrentLimits.StatorCurrentLimit = ShooterConstants.statorCurrentLimit;
     leftConfig.CurrentLimits.StatorCurrentLimitEnable = true;
+    leftConfig.TorqueCurrent.PeakForwardTorqueCurrent = ShooterConstants.bangBangPeakCurrentAmps;
+    leftConfig.TorqueCurrent.PeakReverseTorqueCurrent = 0.0;
     tryUntilOk(5, () -> leftTalon.getConfigurator().apply(leftConfig, 0.25));
 
     // Configure right motor
@@ -70,9 +77,12 @@ public class ShooterIOTalonFX implements ShooterIO {
             ? InvertedValue.Clockwise_Positive
             : InvertedValue.CounterClockwise_Positive;
     rightConfig.Slot0 = ShooterConstants.gains;
+    rightConfig.Slot1.kP = ShooterConstants.bangBangKp;
     rightConfig.Feedback.SensorToMechanismRatio = ShooterConstants.gearRatio;
     rightConfig.CurrentLimits.StatorCurrentLimit = ShooterConstants.statorCurrentLimit;
     rightConfig.CurrentLimits.StatorCurrentLimitEnable = true;
+    rightConfig.TorqueCurrent.PeakForwardTorqueCurrent = ShooterConstants.bangBangPeakCurrentAmps;
+    rightConfig.TorqueCurrent.PeakReverseTorqueCurrent = 0.0;
     tryUntilOk(5, () -> rightTalon.getConfigurator().apply(rightConfig, 0.25));
 
     // Get status signals
@@ -135,6 +145,13 @@ public class ShooterIOTalonFX implements ShooterIO {
   }
 
   @Override
+  public void setVelocityFOC(double velocityRadPerSec) {
+    double velocityRotPerSec = Units.radiansToRotations(velocityRadPerSec);
+    leftTalon.setControl(velocityFOCRequest.withVelocity(velocityRotPerSec));
+    rightTalon.setControl(velocityFOCRequest.withVelocity(velocityRotPerSec));
+  }
+
+  @Override
   public void setVoltage(double volts) {
     leftTalon.setControl(voltageRequest.withOutput(volts));
     rightTalon.setControl(voltageRequest.withOutput(volts));
@@ -151,5 +168,15 @@ public class ShooterIOTalonFX implements ShooterIO {
     var gains = new Slot0Configs().withKP(kP).withKV(kV).withKS(kS);
     tryUntilOk(5, () -> leftTalon.getConfigurator().apply(gains, 0.25));
     tryUntilOk(5, () -> rightTalon.getConfigurator().apply(gains, 0.25));
+  }
+
+  @Override
+  public void setPeakTorqueCurrent(double amps) {
+    var config =
+        new TorqueCurrentConfigs()
+            .withPeakForwardTorqueCurrent(amps)
+            .withPeakReverseTorqueCurrent(0.0);
+    tryUntilOk(5, () -> leftTalon.getConfigurator().apply(config, 0.25));
+    tryUntilOk(5, () -> rightTalon.getConfigurator().apply(config, 0.25));
   }
 }

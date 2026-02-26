@@ -26,7 +26,13 @@ public interface ShooterIO {
 
   public default void setVoltage(double volts) {}
 
+  /** Sets both motors to a velocity setpoint using VelocityTorqueCurrentFOC (bang-bang mode). */
+  public default void setVelocityFOC(double velocityRadPerSec) {}
+
   public default void stop() {}
 
   public default void setGains(double kP, double kV, double kS) {}
+
+  /** Sets the peak torque current limit for FOC bang-bang mode. */
+  public default void setPeakTorqueCurrent(double amps) {}
 }

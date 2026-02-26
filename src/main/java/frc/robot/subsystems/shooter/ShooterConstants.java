@@ -24,6 +24,10 @@ public final class ShooterConstants {
   // Setpoint tolerance for isAtSetpoint()
   public static final double toleranceRPM = 100.0;
 
+  // Bang-bang FOC mode
+  public static final double bangBangKp = 999999.0;
+  public static final double bangBangPeakCurrentAmps = 80.0;
+
   // Shoot-on-the-move
   public static final int shotCompensationIterations = 3;
 

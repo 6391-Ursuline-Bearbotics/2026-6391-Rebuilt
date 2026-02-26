@@ -41,6 +41,12 @@ public class Shooter extends SubsystemBase {
   private static final LoggedTunableNumber rpmOverride =
       new LoggedTunableNumber("Shooter/RPMOverride", 0.0);
 
+  // Bang-bang FOC mode (1.0 = enabled, 0.0 = use VelocityVoltage PID)
+  private static final LoggedTunableNumber bangBangEnabled =
+      new LoggedTunableNumber("Shooter/BangBangEnabled", 0.0);
+  private static final LoggedTunableNumber bangBangPeakAmps =
+      new LoggedTunableNumber("Shooter/BangBangPeakAmps", ShooterConstants.bangBangPeakCurrentAmps);
+
   // Enable/disable shoot-on-the-move compensation
   private static final LoggedTunableNumber shootOnMoveEnabled =
       new LoggedTunableNumber("Shooter/ShootOnMoveEnabled", 1.0);
@@ -160,13 +166,21 @@ public class Shooter extends SubsystemBase {
         shooterKp,
         shooterKv,
         shooterKs);
+    LoggedTunableNumber.ifChanged(
+        hashCode() + 1, values -> io.setPeakTorqueCurrent(values[0]), bangBangPeakAmps);
 
     switch (goal) {
       case SHOOT:
         commandedRPM = calculateShootRPM();
         commandedAngleDeg = distanceToAngle.get(distanceToTarget);
         if (GameData.canSpinUp(poseSupplier.get().getTranslation())) {
-          io.setVelocity(rpmToRadPerSec(commandedRPM));
+          if (bangBangEnabled.get() > 0.5) {
+            // VelocityTorqueCurrentFOC with very high kP acts as bang-bang on the motor controller
+            io.setVelocityFOC(rpmToRadPerSec(commandedRPM));
+          } else {
+            // Standard VelocityVoltage PID
+            io.setVelocity(rpmToRadPerSec(commandedRPM));
+          }
           hoodIO.setAngle(commandedAngleDeg);
         } else {
           commandedRPM = 0.0;
