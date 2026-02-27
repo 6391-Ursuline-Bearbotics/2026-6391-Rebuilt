@@ -86,7 +86,7 @@ public class RobotContainer {
 
   // Set to false to use no-op IO when hardware is not connected
   private static final boolean indexerEnabled = true;
-  private static final boolean shooterEnabled = false;
+  private static final boolean shooterEnabled = true;
 
   // Controllers
   private final CommandXboxController drv = new CommandXboxController(0);
