@@ -41,6 +41,10 @@ public class Shooter extends SubsystemBase {
   private static final LoggedTunableNumber rpmOverride =
       new LoggedTunableNumber("Shooter/RPMOverride", 0.0);
 
+  // Hood angle override for servo testing (0 = use distance table, non-zero = use this angle)
+  private static final LoggedTunableNumber hoodAngleOverride =
+      new LoggedTunableNumber("Shooter/HoodAngleOverride", 0.0);
+
   // Bang-bang FOC mode (1.0 = enabled, 0.0 = use VelocityVoltage PID)
   private static final LoggedTunableNumber bangBangEnabled =
       new LoggedTunableNumber("Shooter/BangBangEnabled", 0.0);
@@ -181,27 +185,29 @@ public class Shooter extends SubsystemBase {
             // Standard VelocityVoltage PID
             io.setVelocity(rpmToRadPerSec(commandedRPM));
           }
-          hoodIO.setAngle(commandedAngleDeg);
         } else {
           commandedRPM = 0.0;
           commandedAngleDeg = ShooterConstants.hoodMinAngleDeg;
           io.stop();
-          hoodIO.setAngle(commandedAngleDeg);
         }
         break;
       case EJECT:
         commandedRPM = ejectRPM.get();
         commandedAngleDeg = ShooterConstants.hoodMinAngleDeg;
         io.setVelocity(rpmToRadPerSec(commandedRPM));
-        hoodIO.setAngle(commandedAngleDeg);
         break;
       default:
         commandedRPM = 0.0;
         commandedAngleDeg = ShooterConstants.hoodMinAngleDeg;
         io.stop();
-        hoodIO.setAngle(commandedAngleDeg);
         break;
     }
+
+    // Apply hood angle override for servo testing (non-zero value bypasses distance table)
+    if (hoodAngleOverride.get() != 0.0) {
+      commandedAngleDeg = hoodAngleOverride.get();
+    }
+    hoodIO.setAngle(commandedAngleDeg);
 
     // Log the aim target and hub status for visualization
     Logger.recordOutput(
