@@ -28,6 +28,11 @@ public final class IntakeConstants {
   public static final Slot0Configs rollerGains =
       new Slot0Configs().withKP(0.6).withKV(0.119).withKS(0.24691);
 
+  // Roller jam detection
+  public static final double rollerJamCurrentThreshold = 40.0; // Stator amps
+  public static final double rollerJamDebounceTime = 0.5; // Seconds
+  public static final double rollerJamReverseTime = 0.25; // Seconds to reverse
+
   // Simulation
   public static final double deploySimMOI = 0.01;
   public static final double rollerSimMOI = 0.001;

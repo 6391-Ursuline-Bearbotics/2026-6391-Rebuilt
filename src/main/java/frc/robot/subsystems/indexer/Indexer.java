@@ -4,6 +4,7 @@ import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.wpilibj.Alert;
 import edu.wpi.first.wpilibj.Alert.AlertType;
 import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
@@ -29,6 +30,14 @@ public class Indexer extends SubsystemBase {
       new LoggedTunableNumber("Indexer/Kicker/kV", 0.12);
   private static final LoggedTunableNumber kickerKs =
       new LoggedTunableNumber("Indexer/Kicker/kS", 0.0);
+
+  // Tunable jam detection parameters
+  private static final LoggedTunableNumber jamCurrentThreshold =
+      new LoggedTunableNumber("Indexer/JamCurrentThreshold", IndexerConstants.jamCurrentThreshold);
+  private static final LoggedTunableNumber jamDebounceTime =
+      new LoggedTunableNumber("Indexer/JamDebounceTime", IndexerConstants.jamDebounceTime);
+  private static final LoggedTunableNumber jamReverseTime =
+      new LoggedTunableNumber("Indexer/JamReverseTime", IndexerConstants.jamReverseTime);
 
   // Tunable velocity setpoints
   private static final LoggedTunableNumber beltFeedRPM =
@@ -59,6 +68,12 @@ public class Indexer extends SubsystemBase {
   // State
   private Goal goal = Goal.IDLE;
 
+  // Jam detection
+  private final Timer jamTimer = new Timer();
+  private final Timer jamReverseTimer = new Timer();
+  private boolean jammed = false;
+  private Goal goalBeforeJam = Goal.IDLE;
+
   // Alerts
   private final Alert beltDisconnectedAlert =
       new Alert("Indexer belt motor disconnected.", AlertType.kError);
@@ -68,11 +83,13 @@ public class Indexer extends SubsystemBase {
       new Alert("Indexer belt motor over temperature.", AlertType.kWarning);
   private final Alert kickerOverTempAlert =
       new Alert("Indexer kicker motor over temperature.", AlertType.kWarning);
+  private final Alert jamAlert = new Alert("Indexer jam detected.", AlertType.kWarning);
 
   public Indexer(IndexerBeltIO beltIO, IndexerKickerIO kickerIO, Supplier<Pose2d> poseSupplier) {
     this.beltIO = beltIO;
     this.kickerIO = kickerIO;
     this.poseSupplier = poseSupplier;
+    jamTimer.start();
   }
 
   public void setGoal(Goal goal) {
@@ -116,28 +133,74 @@ public class Indexer extends SubsystemBase {
         kickerKv,
         kickerKs);
 
-    // Motor control based on goal
+    // Determine commanded velocities and whether motors are active
+    double commandedBeltVel = 0.0;
+    double commandedKickerVel = 0.0;
+    boolean motorsActive = false;
+
     switch (goal) {
       case FEED:
         if (GameData.canFeed(poseSupplier.get().getTranslation())) {
-          beltIO.setVelocity(rpmToRadPerSec(beltFeedRPM.get()));
-          kickerIO.setVelocity(rpmToRadPerSec(kickerFeedRPM.get()));
-        } else {
-          beltIO.stop();
-          kickerIO.stop();
+          commandedBeltVel = rpmToRadPerSec(beltFeedRPM.get());
+          commandedKickerVel = rpmToRadPerSec(kickerFeedRPM.get());
+          motorsActive = true;
         }
         break;
       case EJECT:
-        beltIO.setVelocity(rpmToRadPerSec(beltEjectRPM.get()));
-        kickerIO.setVelocity(rpmToRadPerSec(kickerEjectRPM.get()));
+        commandedBeltVel = rpmToRadPerSec(beltEjectRPM.get());
+        commandedKickerVel = rpmToRadPerSec(kickerEjectRPM.get());
+        motorsActive = true;
         break;
       default:
-        beltIO.stop();
-        kickerIO.stop();
         break;
     }
 
+    // Jam detection: either belt or kicker stalled while motors are active
+    boolean beltStall =
+        motorsActive
+            && beltInputs.statorCurrentAmps > jamCurrentThreshold.get()
+            && Math.abs(beltInputs.velocityRadPerSec) < Math.abs(commandedBeltVel) * 0.1;
+    boolean kickerStall =
+        motorsActive
+            && kickerInputs.statorCurrentAmps > jamCurrentThreshold.get()
+            && Math.abs(kickerInputs.velocityRadPerSec) < Math.abs(commandedKickerVel) * 0.1;
+
+    if (!beltStall && !kickerStall) {
+      jamTimer.restart();
+    }
+
+    // Handle jam state
+    if (jammed) {
+      // Reversing both motors to clear jam
+      beltIO.setVelocity(rpmToRadPerSec(beltEjectRPM.get()));
+      kickerIO.setVelocity(rpmToRadPerSec(kickerEjectRPM.get()));
+      if (jamReverseTimer.hasElapsed(jamReverseTime.get())) {
+        // Done reversing, resume previous goal
+        jammed = false;
+        goal = goalBeforeJam;
+      }
+    } else if (motorsActive && jamTimer.hasElapsed(jamDebounceTime.get())) {
+      // Jam detected — start reversing both motors
+      jammed = true;
+      goalBeforeJam = goal;
+      jamReverseTimer.restart();
+      beltIO.setVelocity(rpmToRadPerSec(beltEjectRPM.get()));
+      kickerIO.setVelocity(rpmToRadPerSec(kickerEjectRPM.get()));
+    } else if (motorsActive) {
+      beltIO.setVelocity(commandedBeltVel);
+      kickerIO.setVelocity(commandedKickerVel);
+    } else {
+      beltIO.stop();
+      kickerIO.stop();
+      jammed = false;
+    }
+
     updateAlerts();
+  }
+
+  @AutoLogOutput(key = "Indexer/Jammed")
+  public boolean isJammed() {
+    return jammed;
   }
 
   private void updateAlerts() {
@@ -145,6 +208,7 @@ public class Indexer extends SubsystemBase {
     kickerDisconnectedAlert.set(!kickerInputs.connected && Constants.currentMode != Mode.SIM);
     beltOverTempAlert.set(beltInputs.tempCelsius > 80.0);
     kickerOverTempAlert.set(kickerInputs.tempCelsius > 80.0);
+    jamAlert.set(jammed);
   }
 
   private static double rpmToRadPerSec(double rpm) {

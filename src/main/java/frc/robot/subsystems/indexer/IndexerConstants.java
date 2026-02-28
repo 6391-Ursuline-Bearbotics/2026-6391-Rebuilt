@@ -27,6 +27,11 @@ public final class IndexerConstants {
   public static final Slot0Configs kickerGains =
       new Slot0Configs().withKP(0.1).withKV(0.12).withKS(0.0);
 
+  // Jam detection
+  public static final double jamCurrentThreshold = 40.0; // Stator amps
+  public static final double jamDebounceTime = 0.5; // Seconds
+  public static final double jamReverseTime = 0.25; // Seconds to reverse
+
   // Simulation
   public static final double beltSimMOI = 0.001;
   public static final double kickerSimMOI = 0.001;

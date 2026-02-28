@@ -4,6 +4,7 @@ import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.interpolation.InterpolatingDoubleTreeMap;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
+import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.Alert;
 import edu.wpi.first.wpilibj.Alert.AlertType;
 import edu.wpi.first.wpilibj.DriverStation;
@@ -55,6 +56,12 @@ public class Shooter extends SubsystemBase {
   private static final LoggedTunableNumber shootOnMoveEnabled =
       new LoggedTunableNumber("Shooter/ShootOnMoveEnabled", 1.0);
 
+  // Tunable jam detection parameters
+  private static final LoggedTunableNumber jamCurrentThreshold =
+      new LoggedTunableNumber("Shooter/JamCurrentThreshold", ShooterConstants.jamCurrentThreshold);
+  private static final LoggedTunableNumber jamDebounceTime =
+      new LoggedTunableNumber("Shooter/JamDebounceTime", ShooterConstants.jamDebounceTime);
+
   public enum Goal {
     IDLE,
     SHOOT,
@@ -83,6 +90,13 @@ public class Shooter extends SubsystemBase {
   private double distanceToTarget = 0.0;
   private Translation2d aimTarget = Translation2d.kZero;
 
+  // Jam detection
+  private final Timer jamTimer = new Timer();
+  private boolean jammed = false;
+
+  // Manual distance setpoint (0 = use vision/pose-calculated distance)
+  private double distanceSetpointMeters = Units.feetToMeters(5.0);
+
   // Alerts
   private final Alert leftDisconnectedAlert =
       new Alert("Shooter left motor disconnected.", AlertType.kError);
@@ -92,6 +106,7 @@ public class Shooter extends SubsystemBase {
       new Alert("Shooter left motor over temperature.", AlertType.kWarning);
   private final Alert rightOverTempAlert =
       new Alert("Shooter right motor over temperature.", AlertType.kWarning);
+  private final Alert jamAlert = new Alert("Shooter jam detected!", AlertType.kError);
 
   public Shooter(
       ShooterIO io,
@@ -105,6 +120,7 @@ public class Shooter extends SubsystemBase {
     this.distanceToRPM = ShooterConstants.createDistanceToRPMMap();
     this.distanceToAngle = ShooterConstants.createDistanceToAngleMap();
     this.distanceToTOF = ShooterConstants.createDistanceToTOFMap();
+    jamTimer.start();
   }
 
   public void setGoal(Goal goal) {
@@ -129,6 +145,21 @@ public class Shooter extends SubsystemBase {
   @AutoLogOutput(key = "Shooter/DistanceToTarget")
   public double getDistanceToTarget() {
     return distanceToTarget;
+  }
+
+  /** Sets the manual distance setpoint in meters. */
+  public void setDistanceSetpoint(double meters) {
+    distanceSetpointMeters = Math.max(0.5, meters);
+  }
+
+  /** Adjusts the manual distance setpoint by a delta in meters. */
+  public void adjustDistanceSetpoint(double deltaMeters) {
+    setDistanceSetpoint(distanceSetpointMeters + deltaMeters);
+  }
+
+  @AutoLogOutput(key = "Shooter/DistanceSetpointFt")
+  public double getDistanceSetpointFt() {
+    return Units.metersToFeet(distanceSetpointMeters);
   }
 
   @AutoLogOutput(key = "Shooter/AverageVelocityRPM")
@@ -173,16 +204,20 @@ public class Shooter extends SubsystemBase {
     LoggedTunableNumber.ifChanged(
         hashCode() + 1, values -> io.setPeakTorqueCurrent(values[0]), bangBangPeakAmps);
 
+    // Clear jam flag when goal changes to an active state (operator re-engages)
+    if ((goal == Goal.SHOOT || goal == Goal.EJECT) && jammed) {
+      jammed = false;
+      jamTimer.restart();
+    }
+
     switch (goal) {
       case SHOOT:
         commandedRPM = calculateShootRPM();
         commandedAngleDeg = distanceToAngle.get(distanceToTarget);
         if (GameData.canSpinUp(poseSupplier.get().getTranslation())) {
           if (bangBangEnabled.get() > 0.5) {
-            // VelocityTorqueCurrentFOC with very high kP acts as bang-bang on the motor controller
             io.setVelocityFOC(rpmToRadPerSec(commandedRPM));
           } else {
-            // Standard VelocityVoltage PID
             io.setVelocity(rpmToRadPerSec(commandedRPM));
           }
         } else {
@@ -201,6 +236,32 @@ public class Shooter extends SubsystemBase {
         commandedAngleDeg = ShooterConstants.hoodMinAngleDeg;
         io.stop();
         break;
+    }
+
+    // Jam detection: high current + near-zero velocity on either motor while actively commanded
+    if (goal == Goal.SHOOT || goal == Goal.EJECT) {
+      double commandedVel = rpmToRadPerSec(commandedRPM);
+      boolean leftStall =
+          inputs.leftStatorCurrentAmps > jamCurrentThreshold.get()
+              && Math.abs(inputs.leftVelocityRadPerSec) < Math.abs(commandedVel) * 0.1;
+      boolean rightStall =
+          inputs.rightStatorCurrentAmps > jamCurrentThreshold.get()
+              && Math.abs(inputs.rightVelocityRadPerSec) < Math.abs(commandedVel) * 0.1;
+
+      if (!leftStall && !rightStall) {
+        jamTimer.restart();
+      }
+
+      if (commandedRPM != 0.0 && jamTimer.hasElapsed(jamDebounceTime.get())) {
+        // Jam detected — stop motors, go to IDLE
+        jammed = true;
+        goal = Goal.IDLE;
+        commandedRPM = 0.0;
+        commandedAngleDeg = ShooterConstants.hoodMinAngleDeg;
+        io.stop();
+      }
+    } else {
+      jamTimer.restart();
     }
 
     // Apply hood angle override for servo testing (non-zero value bypasses distance table)
@@ -222,6 +283,12 @@ public class Shooter extends SubsystemBase {
     // Allow manual RPM override for testing
     if (rpmOverride.get() != 0.0) {
       return rpmOverride.get();
+    }
+
+    // Use manual distance setpoint if set, otherwise calculate from pose
+    if (distanceSetpointMeters > 0.0) {
+      distanceToTarget = distanceSetpointMeters;
+      return distanceToRPM.get(distanceToTarget);
     }
 
     Pose2d robotPose = poseSupplier.get();
@@ -273,11 +340,17 @@ public class Shooter extends SubsystemBase {
     return virtualTarget;
   }
 
+  @AutoLogOutput(key = "Shooter/Jammed")
+  public boolean isJammed() {
+    return jammed;
+  }
+
   private void updateAlerts() {
     leftDisconnectedAlert.set(!inputs.leftConnected && Constants.currentMode != Mode.SIM);
     rightDisconnectedAlert.set(!inputs.rightConnected && Constants.currentMode != Mode.SIM);
     leftOverTempAlert.set(inputs.leftTempCelsius > 80.0);
     rightOverTempAlert.set(inputs.rightTempCelsius > 80.0);
+    jamAlert.set(jammed);
   }
 
   private static double rpmToRadPerSec(double rpm) {

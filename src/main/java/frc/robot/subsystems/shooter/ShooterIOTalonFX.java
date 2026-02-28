@@ -67,6 +67,8 @@ public class ShooterIOTalonFX implements ShooterIO {
     leftConfig.CurrentLimits.StatorCurrentLimitEnable = true;
     leftConfig.TorqueCurrent.PeakForwardTorqueCurrent = ShooterConstants.bangBangPeakCurrentAmps;
     leftConfig.TorqueCurrent.PeakReverseTorqueCurrent = 0.0;
+    leftConfig.MotorOutput.PeakForwardDutyCycle = 1.0;
+    leftConfig.MotorOutput.PeakReverseDutyCycle = 0.0;
     tryUntilOk(5, () -> leftTalon.getConfigurator().apply(leftConfig, 0.25));
 
     // Configure right motor
@@ -83,6 +85,8 @@ public class ShooterIOTalonFX implements ShooterIO {
     rightConfig.CurrentLimits.StatorCurrentLimitEnable = true;
     rightConfig.TorqueCurrent.PeakForwardTorqueCurrent = ShooterConstants.bangBangPeakCurrentAmps;
     rightConfig.TorqueCurrent.PeakReverseTorqueCurrent = 0.0;
+    rightConfig.MotorOutput.PeakForwardDutyCycle = 1.0;
+    rightConfig.MotorOutput.PeakReverseDutyCycle = 0.0;
     tryUntilOk(5, () -> rightTalon.getConfigurator().apply(rightConfig, 0.25));
 
     // Get status signals

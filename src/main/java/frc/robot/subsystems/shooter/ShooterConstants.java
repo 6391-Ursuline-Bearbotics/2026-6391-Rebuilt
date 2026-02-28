@@ -37,6 +37,10 @@ public final class ShooterConstants {
   public static final double hoodMinAngleDeg = 20.0;
   public static final double hoodMaxAngleDeg = 45.0;
 
+  // Jam detection
+  public static final double jamCurrentThreshold = 60.0; // Stator amps
+  public static final double jamDebounceTime = 1.0; // Seconds
+
   // Simulation
   public static final double simMOI = 0.001;
 

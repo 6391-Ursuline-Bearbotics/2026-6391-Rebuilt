@@ -324,6 +324,37 @@ public class RobotContainer {
                     () -> indexer.setGoal(Indexer.Goal.FEED),
                     () -> indexer.setGoal(Indexer.Goal.IDLE))
                 .onlyWhile(shooter::isAtSetpoint));
+
+    // DPAD: Manual distance setpoint + spin up shooter
+    // Left = 5ft, Right = 10ft, Up = +0.5ft, Down = -0.5ft
+    op.pov(270)
+        .onTrue(
+            Commands.runOnce(
+                () -> {
+                  shooter.setDistanceSetpoint(Units.feetToMeters(5.0));
+                  shooter.setGoal(Shooter.Goal.SHOOT);
+                }));
+    op.pov(90)
+        .onTrue(
+            Commands.runOnce(
+                () -> {
+                  shooter.setDistanceSetpoint(Units.feetToMeters(10.0));
+                  shooter.setGoal(Shooter.Goal.SHOOT);
+                }));
+    op.pov(0)
+        .onTrue(
+            Commands.runOnce(
+                () -> {
+                  shooter.adjustDistanceSetpoint(Units.feetToMeters(0.5));
+                  shooter.setGoal(Shooter.Goal.SHOOT);
+                }));
+    op.pov(180)
+        .onTrue(
+            Commands.runOnce(
+                () -> {
+                  shooter.adjustDistanceSetpoint(Units.feetToMeters(-0.5));
+                  shooter.setGoal(Shooter.Goal.SHOOT);
+                }));
   }
 
   // Drive mode helper methods

@@ -44,6 +44,16 @@ public class Intake extends SubsystemBase {
       new LoggedTunableNumber(
           "Intake/Deploy/StallCurrentThreshold", IntakeConstants.deployCurrentThreshold);
 
+  // Tunable roller jam detection parameters
+  private static final LoggedTunableNumber rollerJamCurrentThreshold =
+      new LoggedTunableNumber(
+          "Intake/Roller/JamCurrentThreshold", IntakeConstants.rollerJamCurrentThreshold);
+  private static final LoggedTunableNumber rollerJamDebounceTime =
+      new LoggedTunableNumber(
+          "Intake/Roller/JamDebounceTime", IntakeConstants.rollerJamDebounceTime);
+  private static final LoggedTunableNumber rollerJamReverseTime =
+      new LoggedTunableNumber("Intake/Roller/JamReverseTime", IntakeConstants.rollerJamReverseTime);
+
   /** Desired intake behavior, set by operator controls. */
   public enum Goal {
     IDLE, // Retracted, rollers off
@@ -74,6 +84,12 @@ public class Intake extends SubsystemBase {
   // Deploy current spike detection
   private final Timer stallTimer = new Timer();
 
+  // Roller jam detection
+  private final Timer rollerJamTimer = new Timer();
+  private final Timer rollerJamReverseTimer = new Timer();
+  private boolean rollerJammed = false;
+  private Goal goalBeforeJam = Goal.IDLE;
+
   // Alerts
   private final Alert deployDisconnectedAlert =
       new Alert("Intake deploy motor disconnected.", AlertType.kError);
@@ -83,11 +99,13 @@ public class Intake extends SubsystemBase {
       new Alert("Intake deploy motor over temperature.", AlertType.kWarning);
   private final Alert rollerOverTempAlert =
       new Alert("Intake roller motor over temperature.", AlertType.kWarning);
+  private final Alert rollerJamAlert = new Alert("Intake roller jam detected.", AlertType.kWarning);
 
   public Intake(IntakeDeployIO deployIO, IntakeRollerIO rollerIO) {
     this.deployIO = deployIO;
     this.rollerIO = rollerIO;
     stallTimer.start();
+    rollerJamTimer.start();
   }
 
   public void setGoal(Goal goal) {
@@ -212,22 +230,60 @@ public class Intake extends SubsystemBase {
 
     // Roller control: only run when fully deployed
     if (deployState == DeployState.DEPLOYED) {
+      // Determine commanded velocity for current goal
+      double commandedVelRadPerSec = 0.0;
+      boolean rollerActive = false;
       switch (goal) {
         case INTAKE:
-          rollerIO.setVelocity(rpmToRadPerSec(rollerIntakeRPM.get()));
+          commandedVelRadPerSec = rpmToRadPerSec(rollerIntakeRPM.get());
+          rollerActive = true;
           break;
         case CLUMP_INTAKE:
-          rollerIO.setVelocity(rpmToRadPerSec(rollerClumpIntakeRPM.get()));
+          commandedVelRadPerSec = rpmToRadPerSec(rollerClumpIntakeRPM.get());
+          rollerActive = true;
           break;
         case EJECT:
-          rollerIO.setVelocity(rpmToRadPerSec(rollerEjectRPM.get()));
+          commandedVelRadPerSec = rpmToRadPerSec(rollerEjectRPM.get());
+          rollerActive = true;
           break;
         default:
-          rollerIO.stop();
           break;
+      }
+
+      // Jam detection: high current + near-zero velocity while motor is commanded
+      boolean stallCondition =
+          rollerActive
+              && rollerInputs.statorCurrentAmps > rollerJamCurrentThreshold.get()
+              && Math.abs(rollerInputs.velocityRadPerSec) < Math.abs(commandedVelRadPerSec) * 0.1;
+
+      if (!stallCondition) {
+        rollerJamTimer.restart();
+      }
+
+      // Handle jam state
+      if (rollerJammed) {
+        // Reversing to clear jam
+        rollerIO.setVelocity(rpmToRadPerSec(rollerEjectRPM.get()));
+        if (rollerJamReverseTimer.hasElapsed(rollerJamReverseTime.get())) {
+          // Done reversing, resume previous goal
+          rollerJammed = false;
+          goal = goalBeforeJam;
+        }
+      } else if (rollerActive && rollerJamTimer.hasElapsed(rollerJamDebounceTime.get())) {
+        // Jam detected — start reversing
+        rollerJammed = true;
+        goalBeforeJam = goal;
+        rollerJamReverseTimer.restart();
+        rollerIO.setVelocity(rpmToRadPerSec(rollerEjectRPM.get()));
+      } else if (rollerActive) {
+        rollerIO.setVelocity(commandedVelRadPerSec);
+      } else {
+        rollerIO.stop();
+        rollerJammed = false;
       }
     } else {
       rollerIO.stop();
+      rollerJammed = false;
     }
 
     updateAlerts();
@@ -244,11 +300,17 @@ public class Intake extends SubsystemBase {
     stallTimer.restart();
   }
 
+  @AutoLogOutput(key = "Intake/Roller/Jammed")
+  public boolean isRollerJammed() {
+    return rollerJammed;
+  }
+
   private void updateAlerts() {
     deployDisconnectedAlert.set(!deployInputs.connected && Constants.currentMode != Mode.SIM);
     rollerDisconnectedAlert.set(!rollerInputs.connected && Constants.currentMode != Mode.SIM);
     deployOverTempAlert.set(deployInputs.tempCelsius > 80.0);
     rollerOverTempAlert.set(rollerInputs.tempCelsius > 80.0);
+    rollerJamAlert.set(rollerJammed);
   }
 
   private static double rpmToRadPerSec(double rpm) {
