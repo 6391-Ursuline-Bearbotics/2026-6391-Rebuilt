@@ -355,6 +355,63 @@ public class RobotContainer {
                   shooter.adjustDistanceSetpoint(Units.feetToMeters(-0.5));
                   shooter.setGoal(Shooter.Goal.SHOOT);
                 }));
+
+    // Driver DPAD: snap robot to cardinal field directions, releases rotation once arrived
+    // UP = field north (90°), RIGHT = field east (0°), DOWN = field south (-90°), LEFT = field west (180°)
+    final double kDpadSnapTolerance = Math.toRadians(2.0);
+    drv.pov(0) // Up → face field north
+        .onTrue(
+            DriveCommands.joystickDriveAtAngle(
+                    drive,
+                    () -> -drv.getLeftY(),
+                    () -> -drv.getLeftX(),
+                    () -> Rotation2d.fromDegrees(90))
+                .until(
+                    () ->
+                        Math.abs(
+                                drive.getRotation().minus(Rotation2d.fromDegrees(90)).getRadians())
+                            < kDpadSnapTolerance));
+    drv.pov(90) // Right → face field east
+        .onTrue(
+            DriveCommands.joystickDriveAtAngle(
+                    drive,
+                    () -> -drv.getLeftY(),
+                    () -> -drv.getLeftX(),
+                    () -> Rotation2d.kZero)
+                .until(
+                    () ->
+                        Math.abs(drive.getRotation().minus(Rotation2d.kZero).getRadians())
+                            < kDpadSnapTolerance));
+    drv.pov(180) // Down → face field south
+        .onTrue(
+            DriveCommands.joystickDriveAtAngle(
+                    drive,
+                    () -> -drv.getLeftY(),
+                    () -> -drv.getLeftX(),
+                    () -> Rotation2d.fromDegrees(-90))
+                .until(
+                    () ->
+                        Math.abs(
+                                drive
+                                    .getRotation()
+                                    .minus(Rotation2d.fromDegrees(-90))
+                                    .getRadians())
+                            < kDpadSnapTolerance));
+    drv.pov(270) // Left → face field west
+        .onTrue(
+            DriveCommands.joystickDriveAtAngle(
+                    drive,
+                    () -> -drv.getLeftY(),
+                    () -> -drv.getLeftX(),
+                    () -> Rotation2d.fromDegrees(180))
+                .until(
+                    () ->
+                        Math.abs(
+                                drive
+                                    .getRotation()
+                                    .minus(Rotation2d.fromDegrees(180))
+                                    .getRadians())
+                            < kDpadSnapTolerance));
   }
 
   // Drive mode helper methods
