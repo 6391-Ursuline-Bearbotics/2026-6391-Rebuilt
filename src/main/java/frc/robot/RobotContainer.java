@@ -357,21 +357,9 @@ public class RobotContainer {
                 }));
 
     // Driver DPAD: snap robot to cardinal field directions, releases rotation once arrived
-    // UP = field north (90°), RIGHT = field east (0°), DOWN = field south (-90°), LEFT = field west (180°)
+    // UP = 0°, RIGHT = -90°, DOWN = 180°, LEFT = 90°
     final double kDpadSnapTolerance = Math.toRadians(2.0);
-    drv.pov(0) // Up → face field north
-        .onTrue(
-            DriveCommands.joystickDriveAtAngle(
-                    drive,
-                    () -> -drv.getLeftY(),
-                    () -> -drv.getLeftX(),
-                    () -> Rotation2d.fromDegrees(90))
-                .until(
-                    () ->
-                        Math.abs(
-                                drive.getRotation().minus(Rotation2d.fromDegrees(90)).getRadians())
-                            < kDpadSnapTolerance));
-    drv.pov(90) // Right → face field east
+    drv.pov(0) // Up → 0°
         .onTrue(
             DriveCommands.joystickDriveAtAngle(
                     drive,
@@ -382,7 +370,7 @@ public class RobotContainer {
                     () ->
                         Math.abs(drive.getRotation().minus(Rotation2d.kZero).getRadians())
                             < kDpadSnapTolerance));
-    drv.pov(180) // Down → face field south
+    drv.pov(90) // Right → -90°
         .onTrue(
             DriveCommands.joystickDriveAtAngle(
                     drive,
@@ -392,12 +380,9 @@ public class RobotContainer {
                 .until(
                     () ->
                         Math.abs(
-                                drive
-                                    .getRotation()
-                                    .minus(Rotation2d.fromDegrees(-90))
-                                    .getRadians())
+                                drive.getRotation().minus(Rotation2d.fromDegrees(-90)).getRadians())
                             < kDpadSnapTolerance));
-    drv.pov(270) // Left → face field west
+    drv.pov(180) // Down → 180°
         .onTrue(
             DriveCommands.joystickDriveAtAngle(
                     drive,
@@ -410,6 +395,21 @@ public class RobotContainer {
                                 drive
                                     .getRotation()
                                     .minus(Rotation2d.fromDegrees(180))
+                                    .getRadians())
+                            < kDpadSnapTolerance));
+    drv.pov(270) // Left → 90°
+        .onTrue(
+            DriveCommands.joystickDriveAtAngle(
+                    drive,
+                    () -> -drv.getLeftY(),
+                    () -> -drv.getLeftX(),
+                    () -> Rotation2d.fromDegrees(90))
+                .until(
+                    () ->
+                        Math.abs(
+                                drive
+                                    .getRotation()
+                                    .minus(Rotation2d.fromDegrees(90))
                                     .getRadians())
                             < kDpadSnapTolerance));
   }
