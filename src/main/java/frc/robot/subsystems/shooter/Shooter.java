@@ -100,7 +100,7 @@ public class Shooter extends SubsystemBase {
   private boolean jammed = false;
 
   // Manual distance setpoint (0 = use vision/pose-calculated distance)
-  private double distanceSetpointMeters = Units.feetToMeters(5.0);
+  private double distanceSetpointMeters = 0;
 
   // Alerts
   private final Alert leftDisconnectedAlert =
@@ -200,6 +200,9 @@ public class Shooter extends SubsystemBase {
       updateAlerts();
       return;
     }
+
+    // Always update distance/aim target so logging reflects current value regardless of goal
+    updateAimTarget();
 
     // Update gains if tuned
     LoggedTunableNumber.ifChanged(
@@ -307,17 +310,14 @@ public class Shooter extends SubsystemBase {
     updateAlerts();
   }
 
-  /** Calculates the target RPM based on distance to target with shoot-on-the-move compensation. */
-  private double calculateShootRPM() {
-    // Allow manual RPM override for testing
-    if (rpmOverride.get() != 0.0) {
-      return rpmOverride.get();
-    }
-
-    // Use manual distance setpoint if set, otherwise calculate from pose
+  /**
+   * Updates distanceToTarget and aimTarget every loop so the logged value always reflects the
+   * current robot pose, regardless of whether the shooter goal is active.
+   */
+  private void updateAimTarget() {
     if (distanceSetpointMeters > 0.0) {
       distanceToTarget = distanceSetpointMeters;
-      return distanceToRPM.get(distanceToTarget);
+      return;
     }
 
     Pose2d robotPose = poseSupplier.get();
@@ -345,6 +345,13 @@ public class Shooter extends SubsystemBase {
 
     aimTarget = compensatedTarget;
     distanceToTarget = robotPosition.getDistance(compensatedTarget);
+  }
+
+  /** Returns the target RPM based on the current distanceToTarget (updated each loop). */
+  private double calculateShootRPM() {
+    if (rpmOverride.get() != 0.0) {
+      return rpmOverride.get();
+    }
     return distanceToRPM.get(distanceToTarget);
   }
 
