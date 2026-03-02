@@ -416,10 +416,33 @@ public class RobotContainer {
                   op.getHID().setRumble(GenericHID.RumbleType.kBothRumble, 0.0);
                 }));
 
-    // Driver DPAD: snap robot to cardinal field directions, releases rotation once arrived
-    // UP = 0°, RIGHT = -90°, DOWN = 180°, LEFT = 90°
+    // Driver DPAD: snap intake (front) to cardinal field directions, releases rotation once arrived
+    // UP = 180°, RIGHT = 90°, DOWN = 0°, LEFT = -90°
     final double kDpadSnapTolerance = Math.toRadians(2.0);
-    drv.pov(0) // Up → 0°
+    drv.pov(0) // Up → 180° (intake faces up-field)
+        .onTrue(
+            DriveCommands.joystickDriveAtAngle(
+                    drive,
+                    () -> -drv.getLeftY(),
+                    () -> -drv.getLeftX(),
+                    () -> Rotation2d.fromDegrees(180))
+                .until(
+                    () ->
+                        Math.abs(drive.getRotation().minus(Rotation2d.fromDegrees(180)).getRadians())
+                            < kDpadSnapTolerance));
+    drv.pov(90) // Right → 90° (intake faces right)
+        .onTrue(
+            DriveCommands.joystickDriveAtAngle(
+                    drive,
+                    () -> -drv.getLeftY(),
+                    () -> -drv.getLeftX(),
+                    () -> Rotation2d.fromDegrees(90))
+                .until(
+                    () ->
+                        Math.abs(
+                                drive.getRotation().minus(Rotation2d.fromDegrees(90)).getRadians())
+                            < kDpadSnapTolerance));
+    drv.pov(180) // Down → 0° (intake faces down-field)
         .onTrue(
             DriveCommands.joystickDriveAtAngle(
                     drive, () -> -drv.getLeftY(), () -> -drv.getLeftX(), () -> Rotation2d.kZero)
@@ -427,7 +450,7 @@ public class RobotContainer {
                     () ->
                         Math.abs(drive.getRotation().minus(Rotation2d.kZero).getRadians())
                             < kDpadSnapTolerance));
-    drv.pov(90) // Right → -90°
+    drv.pov(270) // Left → -90° (intake faces left)
         .onTrue(
             DriveCommands.joystickDriveAtAngle(
                     drive,
@@ -438,29 +461,6 @@ public class RobotContainer {
                     () ->
                         Math.abs(
                                 drive.getRotation().minus(Rotation2d.fromDegrees(-90)).getRadians())
-                            < kDpadSnapTolerance));
-    drv.pov(180) // Down → 180°
-        .onTrue(
-            DriveCommands.joystickDriveAtAngle(
-                    drive,
-                    () -> -drv.getLeftY(),
-                    () -> -drv.getLeftX(),
-                    () -> Rotation2d.fromDegrees(180))
-                .until(
-                    () ->
-                        Math.abs(
-                                drive.getRotation().minus(Rotation2d.fromDegrees(180)).getRadians())
-                            < kDpadSnapTolerance));
-    drv.pov(270) // Left → 90°
-        .onTrue(
-            DriveCommands.joystickDriveAtAngle(
-                    drive,
-                    () -> -drv.getLeftY(),
-                    () -> -drv.getLeftX(),
-                    () -> Rotation2d.fromDegrees(90))
-                .until(
-                    () ->
-                        Math.abs(drive.getRotation().minus(Rotation2d.fromDegrees(90)).getRadians())
                             < kDpadSnapTolerance));
   }
 
@@ -545,9 +545,9 @@ public class RobotContainer {
       target = FieldConstants.getPassingTarget(robotPosition, isRedAlliance);
     }
 
-    // Calculate angle to target
+    // Calculate angle to target — add π so the back (shooter) faces the target
     Translation2d robotToTarget = target.minus(robotPosition);
-    double targetHeading = Math.atan2(robotToTarget.getY(), robotToTarget.getX());
+    double targetHeading = Math.atan2(robotToTarget.getY(), robotToTarget.getX()) + Math.PI;
 
     double omega = aimTargetController.calculate(drive.getRotation().getRadians(), targetHeading);
 
