@@ -139,12 +139,14 @@ public class RobotContainer {
                     new ShooterIOTalonFX(),
                     new ShooterHoodIOServo(),
                     drive::getPose,
-                    drive::getFieldRelativeSpeeds)
+                    drive::getFieldRelativeSpeeds,
+                    () -> indexer.getGoal() == Indexer.Goal.FEED)
                 : new Shooter(
                     new ShooterIO() {},
                     new ShooterHoodIO() {},
                     drive::getPose,
-                    drive::getFieldRelativeSpeeds);
+                    drive::getFieldRelativeSpeeds,
+                    () -> indexer.getGoal() == Indexer.Goal.FEED);
 
         break;
 
@@ -168,7 +170,8 @@ public class RobotContainer {
                 new ShooterIOSim(),
                 new ShooterHoodIOSim(),
                 drive::getPose,
-                drive::getFieldRelativeSpeeds);
+                drive::getFieldRelativeSpeeds,
+                () -> indexer.getGoal() == Indexer.Goal.FEED);
         break;
 
       default:
@@ -188,7 +191,8 @@ public class RobotContainer {
                 new ShooterIO() {},
                 new ShooterHoodIO() {},
                 drive::getPose,
-                drive::getFieldRelativeSpeeds);
+                drive::getFieldRelativeSpeeds,
+                () -> indexer.getGoal() == Indexer.Goal.FEED);
         break;
     }
 

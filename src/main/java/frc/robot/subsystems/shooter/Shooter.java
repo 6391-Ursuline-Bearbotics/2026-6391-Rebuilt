@@ -46,9 +46,10 @@ public class Shooter extends SubsystemBase {
   private static final LoggedTunableNumber hoodAngleOverride =
       new LoggedTunableNumber("Shooter/HoodAngleOverride", 0.0);
 
-  // Bang-bang FOC mode (1.0 = enabled, 0.0 = use VelocityVoltage PID)
-  private static final LoggedTunableNumber bangBangEnabled =
-      new LoggedTunableNumber("Shooter/BangBangEnabled", 0.0);
+  // Hybrid control: bang-bang spin-up, PID hold, bang-bang while feeding
+  // (1.0 = hybrid enabled, 0.0 = pure PID always)
+  private static final LoggedTunableNumber hybridControlEnabled =
+      new LoggedTunableNumber("Shooter/HybridControlEnabled", 1.0);
   private static final LoggedTunableNumber bangBangPeakAmps =
       new LoggedTunableNumber("Shooter/BangBangPeakAmps", ShooterConstants.bangBangPeakCurrentAmps);
 
@@ -90,6 +91,10 @@ public class Shooter extends SubsystemBase {
   private double distanceToTarget = 0.0;
   private Translation2d aimTarget = Translation2d.kZero;
 
+  // Hybrid control state — latches true once at setpoint, resets on goal change
+  private boolean spunUp = false;
+  private final Supplier<Boolean> indexerFeedingSupplier;
+
   // Jam detection
   private final Timer jamTimer = new Timer();
   private boolean jammed = false;
@@ -112,11 +117,13 @@ public class Shooter extends SubsystemBase {
       ShooterIO io,
       ShooterHoodIO hoodIO,
       Supplier<Pose2d> poseSupplier,
-      Supplier<ChassisSpeeds> fieldSpeedsSupplier) {
+      Supplier<ChassisSpeeds> fieldSpeedsSupplier,
+      Supplier<Boolean> indexerFeedingSupplier) {
     this.io = io;
     this.hoodIO = hoodIO;
     this.poseSupplier = poseSupplier;
     this.fieldSpeedsSupplier = fieldSpeedsSupplier;
+    this.indexerFeedingSupplier = indexerFeedingSupplier;
     this.distanceToRPM = ShooterConstants.createDistanceToRPMMap();
     this.distanceToAngle = ShooterConstants.createDistanceToAngleMap();
     this.distanceToTOF = ShooterConstants.createDistanceToTOFMap();
@@ -215,25 +222,47 @@ public class Shooter extends SubsystemBase {
         commandedRPM = calculateShootRPM();
         commandedAngleDeg = distanceToAngle.get(distanceToTarget);
         if (GameData.canSpinUp(poseSupplier.get().getTranslation())) {
-          if (bangBangEnabled.get() > 0.5) {
+          // Latch spunUp once at setpoint (resets when goal changes away from SHOOT)
+          if (isAtSetpoint()) {
+            spunUp = true;
+          }
+
+          boolean useHybrid = hybridControlEnabled.get() > 0.5;
+          boolean useBangBang;
+          if (!useHybrid) {
+            // Pure PID mode
+            useBangBang = false;
+          } else if (!spunUp) {
+            // Spin-up phase: bang-bang for max torque
+            useBangBang = true;
+          } else {
+            // At speed: bang-bang while feeding, PID while holding
+            useBangBang = indexerFeedingSupplier.get();
+          }
+
+          if (useBangBang) {
             io.setVelocityFOC(rpmToRadPerSec(commandedRPM));
           } else {
             io.setVelocity(rpmToRadPerSec(commandedRPM));
           }
+          Logger.recordOutput("Shooter/ControlMode", useBangBang ? "BangBang" : "PID");
         } else {
           commandedRPM = 0.0;
           commandedAngleDeg = ShooterConstants.hoodMinAngleDeg;
+          spunUp = false;
           io.stop();
         }
         break;
       case EJECT:
         commandedRPM = ejectRPM.get();
         commandedAngleDeg = ShooterConstants.hoodMinAngleDeg;
+        spunUp = false;
         io.setVelocity(rpmToRadPerSec(commandedRPM));
         break;
       default:
         commandedRPM = 0.0;
         commandedAngleDeg = ShooterConstants.hoodMinAngleDeg;
+        spunUp = false;
         io.stop();
         break;
     }
