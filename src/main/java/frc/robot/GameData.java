@@ -29,6 +29,23 @@ public class GameData {
     return isHubActiveInTeleop(alliance.get(), DriverStation.getMatchTime());
   }
 
+  /**
+   * Returns true if our hub is currently inactive but will become active within the given lead
+   * time. Useful for triggering warnings before a shift starts.
+   */
+  public static boolean isHubActivatingSoon(double leadTimeSeconds) {
+    Optional<Alliance> alliance = DriverStation.getAlliance();
+    if (alliance.isEmpty()) {
+      return false;
+    }
+    if (!DriverStation.isTeleopEnabled()) {
+      return false;
+    }
+    double matchTime = DriverStation.getMatchTime();
+    return !isHubActiveInTeleop(alliance.get(), matchTime)
+        && isHubActiveInTeleop(alliance.get(), matchTime - leadTimeSeconds);
+  }
+
   /** Returns true if our hub is active or will be within the spinup lead time. */
   public static boolean isHubActiveOrSoon() {
     Optional<Alliance> alliance = DriverStation.getAlliance();

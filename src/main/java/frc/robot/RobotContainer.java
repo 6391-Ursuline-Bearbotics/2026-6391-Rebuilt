@@ -28,6 +28,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
+import edu.wpi.first.wpilibj2.command.button.Trigger;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 import frc.robot.commands.DriveCommands;
 import frc.robot.generated.TunerConstants;
@@ -360,16 +361,47 @@ public class RobotContainer {
                   shooter.setGoal(Shooter.Goal.SHOOT);
                 }));
 
+    // Operator X: Full eject (reverse shooter + indexer + intake rollers)
+    op.x()
+        .whileTrue(
+            Commands.startEnd(
+                () -> {
+                  shooter.setGoal(Shooter.Goal.EJECT);
+                  indexer.setGoal(Indexer.Goal.EJECT);
+                  intake.setGoal(Intake.Goal.EJECT);
+                },
+                () -> {
+                  shooter.setGoal(Shooter.Goal.IDLE);
+                  indexer.setGoal(Indexer.Goal.IDLE);
+                  intake.setGoal(Intake.Goal.IDLE);
+                },
+                shooter,
+                indexer,
+                intake));
+
+    // Driver right trigger: Ungated indexer feed (hold)
+    drv.rightTrigger(0.5).whileTrue(indexer.feedCommand());
+
+    // Rumble both controllers 2 seconds before our hub's active shift starts
+    new Trigger(() -> GameData.isHubActivatingSoon(2.0))
+        .whileTrue(
+            Commands.startEnd(
+                () -> {
+                  drv.getHID().setRumble(GenericHID.RumbleType.kBothRumble, 1.0);
+                  op.getHID().setRumble(GenericHID.RumbleType.kBothRumble, 1.0);
+                },
+                () -> {
+                  drv.getHID().setRumble(GenericHID.RumbleType.kBothRumble, 0.0);
+                  op.getHID().setRumble(GenericHID.RumbleType.kBothRumble, 0.0);
+                }));
+
     // Driver DPAD: snap robot to cardinal field directions, releases rotation once arrived
     // UP = 0°, RIGHT = -90°, DOWN = 180°, LEFT = 90°
     final double kDpadSnapTolerance = Math.toRadians(2.0);
     drv.pov(0) // Up → 0°
         .onTrue(
             DriveCommands.joystickDriveAtAngle(
-                    drive,
-                    () -> -drv.getLeftY(),
-                    () -> -drv.getLeftX(),
-                    () -> Rotation2d.kZero)
+                    drive, () -> -drv.getLeftY(), () -> -drv.getLeftX(), () -> Rotation2d.kZero)
                 .until(
                     () ->
                         Math.abs(drive.getRotation().minus(Rotation2d.kZero).getRadians())
@@ -396,10 +428,7 @@ public class RobotContainer {
                 .until(
                     () ->
                         Math.abs(
-                                drive
-                                    .getRotation()
-                                    .minus(Rotation2d.fromDegrees(180))
-                                    .getRadians())
+                                drive.getRotation().minus(Rotation2d.fromDegrees(180)).getRadians())
                             < kDpadSnapTolerance));
     drv.pov(270) // Left → 90°
         .onTrue(
@@ -410,11 +439,7 @@ public class RobotContainer {
                     () -> Rotation2d.fromDegrees(90))
                 .until(
                     () ->
-                        Math.abs(
-                                drive
-                                    .getRotation()
-                                    .minus(Rotation2d.fromDegrees(90))
-                                    .getRadians())
+                        Math.abs(drive.getRotation().minus(Rotation2d.fromDegrees(90)).getRadians())
                             < kDpadSnapTolerance));
   }
 
