@@ -279,10 +279,18 @@ public class RobotContainer {
                 () -> {
                   currentDriveMode = DriveMode.AIM_TARGET;
                   aimTargetController.reset(drive.getRotation().getRadians());
+                  shooter.setGoal(Shooter.Goal.SHOOT);
                 }));
 
-    // Switch to X pattern when X button is pressed
-    drv.x().onTrue(Commands.runOnce(drive::stopWithX, drive));
+    // Switch to X pattern when X button is pressed (also spins up shooter)
+    drv.x()
+        .onTrue(
+            Commands.runOnce(
+                () -> {
+                  drive.stopWithX();
+                  shooter.setGoal(Shooter.Goal.SHOOT);
+                },
+                drive));
 
     // Reset gyro when Start button is pressed
     drv.start()
@@ -312,23 +320,25 @@ public class RobotContainer {
                   drive.clearMaxSpeedOverride();
                 }));
 
-    // Operator indexer controls
-    op.rightTrigger(0.5).whileTrue(indexer.feedCommand());
+    // Operator indexer controls (ungated feed + auto-spinup)
+    op.rightTrigger(0.5)
+        .onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)))
+        .whileTrue(indexer.feedCommand());
 
-    // --- Temporary shooter testing controls ---
     // Left bumper: Spin up shooter (toggle on)
     op.leftBumper().onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)));
 
     // Right bumper: Stop shooter (toggle off)
     op.rightBumper().onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.IDLE)));
 
-    // Left trigger: Feed gated by isAtSetpoint (hold)
+    // Left trigger: Auto-spinup, wait for setpoint, then feed (hold)
     op.leftTrigger(0.5)
         .whileTrue(
-            Commands.startEnd(
-                    () -> indexer.setGoal(Indexer.Goal.FEED),
-                    () -> indexer.setGoal(Indexer.Goal.IDLE))
-                .onlyWhile(shooter::isAtSetpoint));
+            Commands.sequence(
+                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+                Commands.waitUntil(shooter::isAtSetpoint),
+                Commands.run(() -> indexer.setGoal(Indexer.Goal.FEED))
+                    .finallyDo(() -> indexer.setGoal(Indexer.Goal.IDLE))));
 
     // DPAD: Manual distance setpoint + spin up shooter
     // Left = 5ft, Right = 10ft, Up = +0.5ft, Down = -0.5ft
@@ -379,8 +389,10 @@ public class RobotContainer {
                 indexer,
                 intake));
 
-    // Driver right trigger: Ungated indexer feed (hold)
-    drv.rightTrigger(0.5).whileTrue(indexer.feedCommand());
+    // Driver right trigger: Ungated indexer feed + auto-spinup (hold)
+    drv.rightTrigger(0.5)
+        .onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)))
+        .whileTrue(indexer.feedCommand());
 
     // Rumble both controllers 2 seconds before our hub's active shift starts
     new Trigger(() -> GameData.isHubActivatingSoon(2.0))
