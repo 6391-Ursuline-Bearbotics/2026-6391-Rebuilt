@@ -204,35 +204,44 @@ public class RobotContainer {
     autoChooser = new AutoChooser();
     SmartDashboard.putData("Auto Choices", autoChooser);
 
-    // Auto routines
-    autoChooser.addRoutine("Reset Odometry Start", autoRoutines::resetOdometryStart);
-    autoChooser.addRoutine("Depot Cycle", autoRoutines::depotCycle);
-    autoChooser.addRoutine("Depot Inside", autoRoutines::depotInside);
+    // Competition auto routines (always available)
     autoChooser.addRoutine("Outpost Double Pass", autoRoutines::outpostDoublePass);
     autoChooser.addRoutine("Depot Double Pass", autoRoutines::depotDoublePass);
+    autoChooser.addRoutine(
+        "Outpost Double Pass (Shoot First)", autoRoutines::outpostDoublePassShootFirst);
+    autoChooser.addRoutine(
+        "Depot Double Pass (Shoot First)", autoRoutines::depotDoublePassShootFirst);
 
-    // Set up SysId routines
-    autoChooser.addCmd(
-        "Drive Wheel Radius Characterization",
-        () -> DriveCommands.wheelRadiusCharacterization(drive));
-    autoChooser.addCmd(
-        "Drive Simple FF Characterization", () -> DriveCommands.feedforwardCharacterization(drive));
-    autoChooser.addCmd(
-        "Drive Forward 15ft", () -> DriveCommands.driveForward(drive, Units.feetToMeters(15)));
-    autoChooser.addCmd(
-        "Drive SysId (Quasistatic Forward)",
-        () -> drive.sysIdQuasistatic(SysIdRoutine.Direction.kForward));
-    autoChooser.addCmd(
-        "Drive SysId (Quasistatic Reverse)",
-        () -> drive.sysIdQuasistatic(SysIdRoutine.Direction.kReverse));
-    autoChooser.addCmd(
-        "Drive SysId (Dynamic Forward)", () -> drive.sysIdDynamic(SysIdRoutine.Direction.kForward));
-    autoChooser.addCmd(
-        "Drive SysId (Dynamic Reverse)", () -> drive.sysIdDynamic(SysIdRoutine.Direction.kReverse));
-    autoChooser.addCmd(
-        "Intake Roller FF Characterization", () -> Intake.rollerFFCharacterization(intake));
-    autoChooser.addCmd(
-        "Shooter FF Characterization", () -> Shooter.shooterFFCharacterization(shooter));
+    // Test and characterization routines (tuning mode only)
+    if (Constants.tuningMode) {
+      autoChooser.addRoutine("Reset Odometry Start", autoRoutines::resetOdometryStart);
+      autoChooser.addRoutine("Depot Cycle", autoRoutines::depotCycle);
+      autoChooser.addRoutine("Depot Inside", autoRoutines::depotInside);
+      autoChooser.addCmd(
+          "Drive Wheel Radius Characterization",
+          () -> DriveCommands.wheelRadiusCharacterization(drive));
+      autoChooser.addCmd(
+          "Drive Simple FF Characterization",
+          () -> DriveCommands.feedforwardCharacterization(drive));
+      autoChooser.addCmd(
+          "Drive Forward 15ft", () -> DriveCommands.driveForward(drive, Units.feetToMeters(15)));
+      autoChooser.addCmd(
+          "Drive SysId (Quasistatic Forward)",
+          () -> drive.sysIdQuasistatic(SysIdRoutine.Direction.kForward));
+      autoChooser.addCmd(
+          "Drive SysId (Quasistatic Reverse)",
+          () -> drive.sysIdQuasistatic(SysIdRoutine.Direction.kReverse));
+      autoChooser.addCmd(
+          "Drive SysId (Dynamic Forward)",
+          () -> drive.sysIdDynamic(SysIdRoutine.Direction.kForward));
+      autoChooser.addCmd(
+          "Drive SysId (Dynamic Reverse)",
+          () -> drive.sysIdDynamic(SysIdRoutine.Direction.kReverse));
+      autoChooser.addCmd(
+          "Intake Roller FF Characterization", () -> Intake.rollerFFCharacterization(intake));
+      autoChooser.addCmd(
+          "Shooter FF Characterization", () -> Shooter.shooterFFCharacterization(shooter));
+    }
 
     // Configure the button bindings
     configureButtonBindings();

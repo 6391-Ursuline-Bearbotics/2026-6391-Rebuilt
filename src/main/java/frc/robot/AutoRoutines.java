@@ -72,97 +72,87 @@ public class AutoRoutines {
     return routine;
   }
 
-  /**
-   * Full 20-second auto (outpost side): sprint across bump, run OutpostDoublePass trajectory, spin
-   * up shooter, sprint back with back aimed at hub, deploy intake, aim, and shoot for 10 seconds.
-   */
   public AutoRoutine outpostDoublePass() {
-    AutoRoutine routine = factory.newRoutine("Outpost Double Pass");
-    AutoTrajectory outpostBump = routine.trajectory("OutpostBump");
-    AutoTrajectory doublePass = routine.trajectory("OutpostDoublePass");
-    AutoTrajectory bumpReturn = routine.trajectory("OutpostBumpReturn");
+    return buildDoublePass(
+        "Outpost Double Pass", "OutpostBump", "OutpostDoublePass", "OutpostBumpReturn", false);
+  }
 
-    routine
-        .active()
-        .onTrue(
-            Commands.sequence(
-                // Seed odometry from OutpostBump start (alliance-flipped, Limelight overrides on
-                // real robot)
-                outpostBump.resetOdometry(),
+  public AutoRoutine outpostDoublePassShootFirst() {
+    return buildDoublePass(
+        "Outpost Double Pass Shoot First",
+        "OutpostBump",
+        "OutpostDoublePass",
+        "OutpostBumpReturn",
+        true);
+  }
 
-                // Cross the bump via Choreo trajectory
-                outpostBump.cmd(),
+  public AutoRoutine depotDoublePass() {
+    return buildDoublePass(
+        "Depot Double Pass", "DepotBump", "DepotDoublePass", "DepotBumpReturn", false);
+  }
 
-                // Deploy intake after crossing bump
-                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
-
-                // PID to DepotDoublePass start
-                sprintToPose(doublePass.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
-
-                // Run DepotDoublePass trajectory
-                doublePass.cmd(),
-
-                // Spin up shooter (auto-tracks RPM/hood angle from distance LUT)
-                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
-
-                // PID to DepotBumpReturn start
-                sprintToPose(bumpReturn.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
-
-                // Cross back over bump via Choreo trajectory
-                bumpReturn.cmd(),
-
-                // Fine-tune aim (back at hub) before shooting
-                aimBackAtHub().withTimeout(1.0),
-
-                // Feed and shoot for remaining time
-                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                Commands.waitSeconds(10.0),
-
-                // Cleanup
-                Commands.runOnce(
-                    () -> {
-                      shooter.setGoal(Shooter.Goal.IDLE);
-                      indexer.setGoal(Indexer.Goal.IDLE);
-                      intake.setGoal(Intake.Goal.IDLE);
-                    })));
-
-    return routine;
+  public AutoRoutine depotDoublePassShootFirst() {
+    return buildDoublePass(
+        "Depot Double Pass Shoot First", "DepotBump", "DepotDoublePass", "DepotBumpReturn", true);
   }
 
   /**
-   * Full 20-second auto (depot side): mirrored version of outpostDoublePass using Y-mirrored
-   * trajectories.
+   * Builds a double pass auto routine. Crosses bump, intakes across the field via trajectory,
+   * returns over bump, aims at hub, and feeds for remaining time. If shootFirst is true, shoots the
+   * preloaded ball before crossing the bump.
    */
-  public AutoRoutine depotDoublePass() {
-    AutoRoutine routine = factory.newRoutine("Depot Double Pass");
-    AutoTrajectory depotBump = routine.trajectory("DepotBump");
-    AutoTrajectory doublePass = routine.trajectory("DepotDoublePass");
-    AutoTrajectory bumpReturn = routine.trajectory("DepotBumpReturn");
+  private AutoRoutine buildDoublePass(
+      String name,
+      String bumpTrajName,
+      String doublePassTrajName,
+      String bumpReturnTrajName,
+      boolean shootFirst) {
+    AutoRoutine routine = factory.newRoutine(name);
+    AutoTrajectory bump = routine.trajectory(bumpTrajName);
+    AutoTrajectory doublePass = routine.trajectory(doublePassTrajName);
+    AutoTrajectory bumpReturn = routine.trajectory(bumpReturnTrajName);
+
+    // Build shoot-first prefix if needed
+    Command shootFirstSequence =
+        shootFirst
+            ? Commands.sequence(
+                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+                aimBackAtHub().withTimeout(1.5),
+                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                Commands.waitSeconds(0.5),
+                Commands.runOnce(
+                    () -> {
+                      indexer.setGoal(Indexer.Goal.IDLE);
+                      shooter.setGoal(Shooter.Goal.IDLE);
+                    }))
+            : Commands.none();
 
     routine
         .active()
         .onTrue(
             Commands.sequence(
-                // Seed odometry from DepotBump start (alliance-flipped, Limelight overrides on real
-                // robot)
-                depotBump.resetOdometry(),
+                // Seed odometry from bump trajectory start
+                bump.resetOdometry(),
+
+                // Optionally shoot preloaded ball first
+                shootFirstSequence,
 
                 // Cross the bump via Choreo trajectory
-                depotBump.cmd(),
+                bump.cmd(),
 
                 // Deploy intake after crossing bump
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
 
-                // PID to DepotDoublePass start
+                // PID to double pass trajectory start
                 sprintToPose(doublePass.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
 
-                // Run DepotDoublePass trajectory
+                // Run double pass trajectory
                 doublePass.cmd(),
 
                 // Spin up shooter (auto-tracks RPM/hood angle from distance LUT)
                 Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
 
-                // PID to DepotBumpReturn start
+                // PID to bump return trajectory start
                 sprintToPose(bumpReturn.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
 
                 // Cross back over bump via Choreo trajectory
