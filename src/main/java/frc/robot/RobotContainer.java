@@ -428,7 +428,8 @@ public class RobotContainer {
                     () -> Rotation2d.fromDegrees(180))
                 .until(
                     () ->
-                        Math.abs(drive.getRotation().minus(Rotation2d.fromDegrees(180)).getRadians())
+                        Math.abs(
+                                drive.getRotation().minus(Rotation2d.fromDegrees(180)).getRadians())
                             < kDpadSnapTolerance));
     drv.pov(90) // Right → 90° (intake faces right)
         .onTrue(
@@ -439,8 +440,7 @@ public class RobotContainer {
                     () -> Rotation2d.fromDegrees(90))
                 .until(
                     () ->
-                        Math.abs(
-                                drive.getRotation().minus(Rotation2d.fromDegrees(90)).getRadians())
+                        Math.abs(drive.getRotation().minus(Rotation2d.fromDegrees(90)).getRadians())
                             < kDpadSnapTolerance));
     drv.pov(180) // Down → 0° (intake faces down-field)
         .onTrue(
