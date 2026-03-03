@@ -294,15 +294,13 @@ public class RobotContainer {
                   shooter.setGoal(Shooter.Goal.SHOOT);
                 }));
 
-    // Switch to X pattern when X button is pressed (also spins up shooter)
+    // Aim at hub then lock wheels in X pattern when X is pressed (also spins up shooter)
     drv.x()
         .onTrue(
-            Commands.runOnce(
-                () -> {
-                  drive.stopWithX();
-                  shooter.setGoal(Shooter.Goal.SHOOT);
-                },
-                drive));
+            Commands.sequence(
+                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+                aimAtHub().withTimeout(1.0),
+                Commands.runOnce(() -> drive.stopWithX(), drive)));
 
     // Reset gyro when Start button is pressed
     drv.start()
@@ -577,6 +575,34 @@ public class RobotContainer {
     return new Pose2d(Translation2d.kZero, linearDirection)
         .transformBy(new Transform2d(linearMagnitude, 0.0, Rotation2d.kZero))
         .getTranslation();
+  }
+
+  /** Rotate in place to aim back of robot at hub. */
+  private Command aimAtHub() {
+    ProfiledPIDController headingController =
+        new ProfiledPIDController(5.0, 0, 0.4, new TrapezoidProfile.Constraints(8.0, 20.0));
+    headingController.enableContinuousInput(-Math.PI, Math.PI);
+
+    return Commands.run(
+            () -> {
+              Pose2d current = drive.getPose();
+              boolean isRed =
+                  DriverStation.getAlliance().isPresent()
+                      && DriverStation.getAlliance().get() == Alliance.Red;
+              Translation2d hubCenter = FieldConstants.getHubCenter(isRed);
+
+              Translation2d toHub = hubCenter.minus(current.getTranslation());
+              double angleToHub = Math.atan2(toHub.getY(), toHub.getX());
+              double targetHeading = angleToHub + Math.PI;
+
+              double omega =
+                  headingController.calculate(current.getRotation().getRadians(), targetHeading);
+
+              drive.runVelocity(
+                  ChassisSpeeds.fromFieldRelativeSpeeds(0, 0, omega, current.getRotation()));
+            },
+            drive)
+        .beforeStarting(() -> headingController.reset(drive.getRotation().getRadians()));
   }
 
   /**
