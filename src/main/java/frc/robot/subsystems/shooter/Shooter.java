@@ -234,7 +234,7 @@ public class Shooter extends SubsystemBase {
           boolean useBangBang;
           if (!useHybrid) {
             // Pure PID mode
-            useBangBang = true;
+            useBangBang = false;
           } else if (!spunUp) {
             // Spin-up phase: bang-bang for max torque
             useBangBang = true;
