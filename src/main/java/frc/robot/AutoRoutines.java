@@ -180,6 +180,9 @@ public class AutoRoutines {
                 // Spin up shooter (auto-tracks RPM/hood angle from distance LUT)
                 Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
 
+                // Retract intake before crossing back over the bump
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
+
                 // PID to bump return trajectory start
                 sprintToPose(bumpReturn.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
 

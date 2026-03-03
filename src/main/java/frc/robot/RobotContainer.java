@@ -338,17 +338,30 @@ public class RobotContainer {
     // Left bumper: Spin up shooter (toggle on)
     op.leftBumper().onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)));
 
-    // Right bumper: Stop shooter (toggle off)
-    op.rightBumper().onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.IDLE)));
+    // Right bumper: Stop shooter (toggle off) + return to standard drive mode
+    op.rightBumper()
+        .onTrue(
+            Commands.runOnce(
+                () -> {
+                  shooter.setGoal(Shooter.Goal.IDLE);
+                  currentDriveMode = DriveMode.STANDARD;
+                }));
 
-    // Auto-spinup, wait for setpoint, then feed (hold).  Works on both controllers
-    op.rightTrigger(0.5).or(drv.rightTrigger(0.5))
+    // Auto-spinup + auto-aim, wait for both, then feed (hold).  Works on both controllers
+    op.rightTrigger(0.5)
+        .or(drv.rightTrigger(0.5))
         .whileTrue(
             Commands.sequence(
-                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
-                Commands.waitUntil(shooter::isAtSetpoint),
-                Commands.run(() -> indexer.setGoal(Indexer.Goal.FEED))
-                    .finallyDo(() -> indexer.setGoal(Indexer.Goal.IDLE))));
+                    Commands.runOnce(
+                        () -> {
+                          shooter.setGoal(Shooter.Goal.SHOOT);
+                          currentDriveMode = DriveMode.AIM_TARGET;
+                          aimTargetController.reset(drive.getRotation().getRadians());
+                        }),
+                    Commands.waitUntil(() -> shooter.isAtSetpoint() && isAimedAtTarget()),
+                    Commands.run(() -> indexer.setGoal(Indexer.Goal.FEED))
+                        .finallyDo(() -> indexer.setGoal(Indexer.Goal.IDLE)))
+                .finallyDo(() -> currentDriveMode = DriveMode.STANDARD));
 
     // DPAD: Manual distance setpoint + spin up shooter
     // Left = 5ft, Right = 10ft, Up = +0.5ft, Down = -0.5ft
@@ -559,6 +572,28 @@ public class RobotContainer {
             isRedAlliance
                 ? drive.getRotation().plus(new Rotation2d(Math.PI))
                 : drive.getRotation()));
+  }
+
+  private static final double kAimToleranceRad = Math.toRadians(5.0);
+
+  /**
+   * Returns true when the robot's shooter is pointed within tolerance of the current aim target.
+   */
+  private boolean isAimedAtTarget() {
+    boolean isRedAlliance =
+        DriverStation.getAlliance().isPresent()
+            && DriverStation.getAlliance().get() == Alliance.Red;
+    Translation2d robotPosition = drive.getPose().getTranslation();
+    Translation2d target;
+    if (FieldConstants.isInOwnAllianceZone(robotPosition, isRedAlliance)) {
+      target = FieldConstants.getHubCenter(isRedAlliance);
+    } else {
+      target = FieldConstants.getPassingTarget(robotPosition, isRedAlliance);
+    }
+    Translation2d robotToTarget = target.minus(robotPosition);
+    double targetHeading = Math.atan2(robotToTarget.getY(), robotToTarget.getX()) + Math.PI;
+    double error = MathUtil.angleModulus(targetHeading - drive.getRotation().getRadians());
+    return Math.abs(error) < kAimToleranceRad;
   }
 
   private Translation2d getLinearVelocityFromJoysticks() {

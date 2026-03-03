@@ -43,6 +43,9 @@ public class Intake extends SubsystemBase {
   private static final LoggedTunableNumber stallCurrentThreshold =
       new LoggedTunableNumber(
           "Intake/Deploy/StallCurrentThreshold", IntakeConstants.deployCurrentThreshold);
+  private static final LoggedTunableNumber retractStallCurrentThreshold =
+      new LoggedTunableNumber(
+          "Intake/Deploy/RetractStallCurrentThreshold", IntakeConstants.retractCurrentThreshold);
 
   // Tunable roller jam detection parameters
   private static final LoggedTunableNumber rollerJamCurrentThreshold =
@@ -211,7 +214,8 @@ public class Intake extends SubsystemBase {
         if (goalWantsDeploy) {
           transitionTo(DeployState.DEPLOYING);
           deployIO.setVoltage(deployVoltage.get());
-        } else if (stallDetected) {
+        } else if (stallTimer.hasElapsed(IntakeConstants.deployInrushIgnoreTime)
+            && deployInputs.statorCurrentAmps > retractStallCurrentThreshold.get()) {
           transitionTo(DeployState.RETRACTED);
           deployIO.stop();
         } else {
