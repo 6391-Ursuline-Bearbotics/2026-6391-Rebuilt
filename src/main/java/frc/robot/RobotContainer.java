@@ -211,6 +211,9 @@ public class RobotContainer {
         "Outpost Double Pass (Shoot First)", autoRoutines::outpostDoublePassShootFirst);
     autoChooser.addRoutine(
         "Depot Double Pass (Shoot First)", autoRoutines::depotDoublePassShootFirst);
+    autoChooser.addRoutine("Safe", autoRoutines::safe);
+    autoChooser.addRoutine("Safe (Shoot First)", autoRoutines::safeShootFirst);
+    autoChooser.addRoutine("Shoot Only", autoRoutines::shootOnly);
 
     // Test and characterization routines (tuning mode only)
     if (Constants.tuningMode) {

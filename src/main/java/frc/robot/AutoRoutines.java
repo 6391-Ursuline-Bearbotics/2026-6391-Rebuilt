@@ -96,6 +96,34 @@ public class AutoRoutines {
         "Depot Double Pass Shoot First", "DepotBump", "DepotDoublePass", "DepotBumpReturn", true);
   }
 
+  public AutoRoutine safe() {
+    return buildSafe("Safe", false);
+  }
+
+  public AutoRoutine safeShootFirst() {
+    return buildSafe("Safe Shoot First", true);
+  }
+
+  public AutoRoutine shootOnly() {
+    AutoRoutine routine = factory.newRoutine("Shoot Only");
+
+    routine
+        .active()
+        .onTrue(
+            Commands.sequence(
+                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+                aimBackAtHub().withTimeout(1.5),
+                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                Commands.waitSeconds(10.0),
+                Commands.runOnce(
+                    () -> {
+                      shooter.setGoal(Shooter.Goal.IDLE);
+                      indexer.setGoal(Indexer.Goal.IDLE);
+                    })));
+
+    return routine;
+  }
+
   /**
    * Builds a double pass auto routine. Crosses bump, intakes across the field via trajectory,
    * returns over bump, aims at hub, and feeds for remaining time. If shootFirst is true, shoots the
@@ -157,6 +185,66 @@ public class AutoRoutines {
 
                 // Cross back over bump via Choreo trajectory
                 bumpReturn.cmd(),
+
+                // Fine-tune aim (back at hub) before shooting
+                aimBackAtHub().withTimeout(1.0),
+
+                // Feed and shoot for remaining time
+                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                Commands.waitSeconds(10.0),
+
+                // Cleanup
+                Commands.runOnce(
+                    () -> {
+                      shooter.setGoal(Shooter.Goal.IDLE);
+                      indexer.setGoal(Indexer.Goal.IDLE);
+                      intake.setGoal(Intake.Goal.IDLE);
+                    })));
+
+    return routine;
+  }
+
+  /**
+   * Builds a safe auto routine. Deploys intake at the start, follows the Safe trajectory, then
+   * shoots for remaining time. If shootFirst is true, shoots the preloaded ball before starting.
+   */
+  private AutoRoutine buildSafe(String name, boolean shootFirst) {
+    AutoRoutine routine = factory.newRoutine(name);
+    AutoTrajectory safeTraj = routine.trajectory("Safe");
+
+    // Build shoot-first prefix if needed
+    Command shootFirstSequence =
+        shootFirst
+            ? Commands.sequence(
+                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+                aimBackAtHub().withTimeout(1.5),
+                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                Commands.waitSeconds(3),
+                Commands.runOnce(
+                    () -> {
+                      indexer.setGoal(Indexer.Goal.IDLE);
+                      shooter.setGoal(Shooter.Goal.IDLE);
+                    }))
+            : Commands.none();
+
+    // Spin up shooter on the "Shoot" event marker during trajectory
+    safeTraj.atTime("Shoot").onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)));
+
+    routine
+        .active()
+        .onTrue(
+            Commands.sequence(
+                // Seed odometry from trajectory start
+                safeTraj.resetOdometry(),
+
+                // Optionally shoot preloaded ball first
+                shootFirstSequence,
+
+                // Deploy intake at beginning of trajectory
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
+
+                // Follow the Safe trajectory
+                safeTraj.cmd(),
 
                 // Fine-tune aim (back at hub) before shooting
                 aimBackAtHub().withTimeout(1.0),
