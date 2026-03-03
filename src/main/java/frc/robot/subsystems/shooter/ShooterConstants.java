@@ -50,10 +50,9 @@ public final class ShooterConstants {
    */
   public static InterpolatingDoubleTreeMap createDistanceToRPMMap() {
     var map = new InterpolatingDoubleTreeMap();
-    // TODO: Replace with real measured data
-    map.put(1.0, 2500.0); // Distance to our closest shot
-    map.put(2.0, 3500.0);
-    map.put(3.0, 4000.0); // ~3 Distance to trench shot
+    map.put(1.5, 2500.0); // Distance to our closest shot
+    map.put(2.0, 2500.0); // 2 is auto starting point
+    map.put(3.3, 4100.0); // ~3 Distance to trench shot
     map.put(4.0, 4500.0);
     map.put(5.5, 5000.0); // ~5.5 Distance to corner of alliance zone shot
     map.put(6.0, 5500.0); // Long passing shots
@@ -68,9 +67,9 @@ public final class ShooterConstants {
   public static InterpolatingDoubleTreeMap createDistanceToAngleMap() {
     var map = new InterpolatingDoubleTreeMap();
     // TODO: Replace with real measured data
-    map.put(1.0, 26.0); // 26 is our lowest angle
-    map.put(2.0, 27.0);
-    map.put(3.0, 28.0);
+    map.put(1.5, 26.0); // 26 is our lowest angle
+    map.put(2.0, 26.0);
+    map.put(3.3, 29.0);
     map.put(4.0, 28.0);
     map.put(5.5, 28.0);
     map.put(6.0, 30.0); // I think 30 is roughly the max we want to go

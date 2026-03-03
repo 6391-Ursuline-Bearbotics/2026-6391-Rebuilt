@@ -119,7 +119,7 @@ public class AutoRoutines {
                 Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
                 aimBackAtHub().withTimeout(1.5),
                 Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                Commands.waitSeconds(0.5),
+                Commands.waitSeconds(3),
                 Commands.runOnce(
                     () -> {
                       indexer.setGoal(Indexer.Goal.IDLE);

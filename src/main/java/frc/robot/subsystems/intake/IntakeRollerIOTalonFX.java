@@ -22,8 +22,8 @@ import edu.wpi.first.units.measure.Voltage;
 public class IntakeRollerIOTalonFX implements IntakeRollerIO {
   private final TalonFX talon;
 
-  private final VoltageOut voltageRequest = new VoltageOut(0);
-  private final VelocityVoltage velocityRequest = new VelocityVoltage(0.0);
+  private final VoltageOut voltageRequest = new VoltageOut(0).withEnableFOC(false);
+  private final VelocityVoltage velocityRequest = new VelocityVoltage(0.0).withEnableFOC(false);
 
   private final StatusSignal<AngularVelocity> velocity;
   private final StatusSignal<Voltage> appliedVolts;
