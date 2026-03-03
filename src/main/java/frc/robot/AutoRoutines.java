@@ -114,7 +114,7 @@ public class AutoRoutines {
                 Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
                 aimBackAtHub().withTimeout(1.5),
                 Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                Commands.waitSeconds(10.0),
+                intake.periodicAutoRehomeCommand().withTimeout(10.0),
                 Commands.runOnce(
                     () -> {
                       shooter.setGoal(Shooter.Goal.IDLE);
@@ -147,7 +147,7 @@ public class AutoRoutines {
                 Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
                 aimBackAtHub().withTimeout(1.5),
                 Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                Commands.waitSeconds(3),
+                Commands.waitSeconds(1.0),
                 Commands.runOnce(
                     () -> {
                       indexer.setGoal(Indexer.Goal.IDLE);
@@ -194,7 +194,7 @@ public class AutoRoutines {
 
                 // Feed and shoot for remaining time
                 Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                Commands.waitSeconds(10.0),
+                intake.periodicAutoRehomeCommand().withTimeout(10.0),
 
                 // Cleanup
                 Commands.runOnce(
@@ -222,7 +222,7 @@ public class AutoRoutines {
                 Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
                 aimBackAtHub().withTimeout(1.5),
                 Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                Commands.waitSeconds(3),
+                Commands.waitSeconds(1.0),
                 Commands.runOnce(
                     () -> {
                       indexer.setGoal(Indexer.Goal.IDLE);
@@ -254,7 +254,7 @@ public class AutoRoutines {
 
                 // Feed and shoot for remaining time
                 Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                Commands.waitSeconds(10.0),
+                intake.periodicAutoRehomeCommand().withTimeout(10.0),
 
                 // Cleanup
                 Commands.runOnce(

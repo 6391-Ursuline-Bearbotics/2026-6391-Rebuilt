@@ -46,6 +46,10 @@ public class Intake extends SubsystemBase {
   private static final LoggedTunableNumber retractStallCurrentThreshold =
       new LoggedTunableNumber(
           "Intake/Deploy/RetractStallCurrentThreshold", IntakeConstants.retractCurrentThreshold);
+  private static final LoggedTunableNumber retractRollerShutoffFraction =
+      new LoggedTunableNumber("Intake/Deploy/RetractRollerShutoffFraction", 0.1);
+  private static final LoggedTunableNumber rehomeDeployTime =
+      new LoggedTunableNumber("Intake/Deploy/RehomeDeployTime", 0.5);
 
   // Tunable roller jam detection parameters
   private static final LoggedTunableNumber rollerJamCurrentThreshold =
@@ -71,7 +75,8 @@ public class Intake extends SubsystemBase {
     RETRACTED,
     DEPLOYING,
     DEPLOYED,
-    RETRACTING
+    RETRACTING,
+    REHOME_DEPLOYING // Brief deploy bump to reseat when already retracted
   }
 
   // IO layers
@@ -83,6 +88,8 @@ public class Intake extends SubsystemBase {
   // State
   private Goal goal = Goal.IDLE;
   private DeployState deployState = DeployState.RETRACTED;
+  private double deployedPositionRad = 0.0;
+  private boolean rehomeRequested = false;
 
   // Deploy current spike detection
   private final Timer stallTimer = new Timer();
@@ -112,6 +119,9 @@ public class Intake extends SubsystemBase {
   }
 
   public void setGoal(Goal goal) {
+    if (goal == Goal.IDLE && deployState == DeployState.RETRACTED) {
+      rehomeRequested = true;
+    }
     this.goal = goal;
   }
 
@@ -182,7 +192,12 @@ public class Intake extends SubsystemBase {
     switch (deployState) {
       case RETRACTED:
         if (goalWantsDeploy) {
+          rehomeRequested = false;
           transitionTo(DeployState.DEPLOYING);
+          deployIO.setVoltage(deployVoltage.get());
+        } else if (rehomeRequested) {
+          rehomeRequested = false;
+          transitionTo(DeployState.REHOME_DEPLOYING);
           deployIO.setVoltage(deployVoltage.get());
         } else {
           deployIO.stop();
@@ -222,6 +237,18 @@ public class Intake extends SubsystemBase {
           deployIO.setVoltage(retractVoltage.get());
         }
         break;
+
+      case REHOME_DEPLOYING:
+        if (goalWantsDeploy) {
+          transitionTo(DeployState.DEPLOYING);
+          deployIO.setVoltage(deployVoltage.get());
+        } else if (stallTimer.hasElapsed(rehomeDeployTime.get())) {
+          transitionTo(DeployState.RETRACTING);
+          deployIO.setVoltage(retractVoltage.get());
+        } else {
+          deployIO.setVoltage(deployVoltage.get());
+        }
+        break;
     }
 
     // Update roller gains if tuned
@@ -232,7 +259,11 @@ public class Intake extends SubsystemBase {
         rollerKv,
         rollerKs);
 
-    // Roller control: only run when fully deployed
+    // Roller control: run when deployed; also keep running during first 90% of retraction
+    boolean retractingWithRollers =
+        deployState == DeployState.RETRACTING
+            && deployInputs.positionRad > deployedPositionRad * retractRollerShutoffFraction.get();
+
     if (deployState == DeployState.DEPLOYED) {
       // Determine commanded velocity for current goal
       double commandedVelRadPerSec = 0.0;
@@ -285,6 +316,8 @@ public class Intake extends SubsystemBase {
         rollerIO.stop();
         rollerJammed = false;
       }
+    } else if (retractingWithRollers) {
+      rollerIO.setVelocity(rpmToRadPerSec(rollerIntakeRPM.get()));
     } else {
       rollerIO.stop();
       rollerJammed = false;
@@ -297,6 +330,7 @@ public class Intake extends SubsystemBase {
     // Switch to coast when deployed so intake can be pushed back
     if (newState == DeployState.DEPLOYED) {
       deployIO.setBrakeMode(false);
+      deployedPositionRad = deployInputs.positionRad;
     } else if (deployState == DeployState.DEPLOYED) {
       deployIO.setBrakeMode(true);
     }
@@ -329,6 +363,17 @@ public class Intake extends SubsystemBase {
   public Command intakeCommand() {
     return Commands.startEnd(() -> setGoal(Goal.INTAKE), () -> setGoal(Goal.IDLE), this)
         .withName("Intake");
+  }
+
+  /**
+   * Periodically triggers a rehome cycle every 2 seconds. Intended for use during auto shooting
+   * phases to keep the intake seated. Does not require the intake subsystem so it can run in
+   * parallel with other intake goal commands.
+   */
+  public Command periodicAutoRehomeCommand() {
+    return Commands.sequence(Commands.waitSeconds(2.0), Commands.runOnce(() -> setGoal(Goal.IDLE)))
+        .repeatedly()
+        .withName("Intake Periodic Auto Rehome");
   }
 
   public Command ejectCommand() {

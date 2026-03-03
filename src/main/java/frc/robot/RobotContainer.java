@@ -635,6 +635,12 @@ public class RobotContainer {
         .beforeStarting(() -> headingController.reset(drive.getRotation().getRadians()));
   }
 
+  /** Called at the start of teleop to reset subsystem states coming out of auto. */
+  public void teleopInit() {
+    shooter.setGoal(Shooter.Goal.IDLE);
+    indexer.setGoal(Indexer.Goal.IDLE);
+  }
+
   /**
    * Use this to pass the autonomous command to the main {@link Robot} class.
    *
