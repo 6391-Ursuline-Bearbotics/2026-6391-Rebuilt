@@ -331,7 +331,7 @@ public class RobotContainer {
                 }));
 
     // Operator indexer controls (ungated feed + auto-spinup)
-    op.rightTrigger(0.5)
+    op.leftTrigger(0.5)
         .onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)))
         .whileTrue(indexer.feedCommand());
 
@@ -341,8 +341,8 @@ public class RobotContainer {
     // Right bumper: Stop shooter (toggle off)
     op.rightBumper().onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.IDLE)));
 
-    // Left trigger: Auto-spinup, wait for setpoint, then feed (hold)
-    op.leftTrigger(0.5)
+    // Auto-spinup, wait for setpoint, then feed (hold).  Works on both controllers
+    op.rightTrigger(0.5).or(drv.rightTrigger(0.5))
         .whileTrue(
             Commands.sequence(
                 Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
@@ -398,11 +398,6 @@ public class RobotContainer {
                 shooter,
                 indexer,
                 intake));
-
-    // Driver right trigger: Ungated indexer feed + auto-spinup (hold)
-    drv.rightTrigger(0.5)
-        .onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)))
-        .whileTrue(indexer.feedCommand());
 
     // Rumble both controllers 2 seconds before our hub's active shift starts
     new Trigger(() -> GameData.isHubActivatingSoon(2.0))
