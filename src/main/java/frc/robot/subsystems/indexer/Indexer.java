@@ -67,6 +67,7 @@ public class Indexer extends SubsystemBase {
 
   // State
   private Goal goal = Goal.IDLE;
+  private boolean feedUngated = false;
 
   // Jam detection
   private final Timer jamTimer = new Timer();
@@ -140,7 +141,7 @@ public class Indexer extends SubsystemBase {
 
     switch (goal) {
       case FEED:
-        if (GameData.canFeed(poseSupplier.get().getTranslation())) {
+        if (feedUngated || GameData.canFeed(poseSupplier.get().getTranslation())) {
           commandedBeltVel = rpmToRadPerSec(beltFeedRPM.get());
           commandedKickerVel = rpmToRadPerSec(kickerFeedRPM.get());
           motorsActive = true;
@@ -223,6 +224,20 @@ public class Indexer extends SubsystemBase {
   public Command feedCommand() {
     return Commands.startEnd(() -> setGoal(Goal.FEED), () -> setGoal(Goal.IDLE), this)
         .withName("Indexer Feed");
+  }
+
+  public Command feedUngatedCommand() {
+    return Commands.startEnd(
+            () -> {
+              feedUngated = true;
+              setGoal(Goal.FEED);
+            },
+            () -> {
+              feedUngated = false;
+              setGoal(Goal.IDLE);
+            },
+            this)
+        .withName("Indexer Feed Ungated");
   }
 
   public Command ejectCommand() {

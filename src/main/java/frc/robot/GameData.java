@@ -12,6 +12,9 @@ import java.util.Optional;
 public class GameData {
   private static final double SPINUP_LEAD_TIME_SECONDS = 5.0;
 
+  // Cached parse of the game-specific message ('R'/'B' → true/false). Null means not yet received.
+  private static Boolean cachedRedInactiveFirst = null;
+
   private GameData() {}
 
   /** Returns true if our alliance's hub is currently active. */
@@ -108,25 +111,26 @@ public class GameData {
    * when no game data is present, during transition/end game periods, and during our active shifts.
    */
   private static boolean isHubActiveInTeleop(Alliance alliance, double matchTime) {
-    String gameData = DriverStation.getGameSpecificMessage();
-    if (gameData.isEmpty()) {
-      return true; // No game data yet, assume active
-    }
-
-    boolean redInactiveFirst;
-    switch (gameData.charAt(0)) {
-      case 'R':
-        redInactiveFirst = true;
-        break;
-      case 'B':
-        redInactiveFirst = false;
-        break;
-      default:
-        return true; // Corrupt data, assume active
+    if (cachedRedInactiveFirst == null) {
+      String gameData = DriverStation.getGameSpecificMessage();
+      if (gameData.isEmpty()) {
+        return true; // No game data yet, assume active
+      }
+      switch (gameData.charAt(0)) {
+        case 'R':
+          cachedRedInactiveFirst = true;
+          break;
+        case 'B':
+          cachedRedInactiveFirst = false;
+          break;
+        default:
+          return true; // Corrupt data, assume active
+      }
     }
 
     // Shift 1 is active for the alliance that did NOT go inactive first
-    boolean shift1Active = (alliance == Alliance.Red) ? !redInactiveFirst : redInactiveFirst;
+    boolean shift1Active =
+        (alliance == Alliance.Red) ? !cachedRedInactiveFirst : cachedRedInactiveFirst;
 
     if (matchTime > 130) {
       return true; // Transition shift, always active

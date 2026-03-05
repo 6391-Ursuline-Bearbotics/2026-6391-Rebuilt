@@ -333,7 +333,7 @@ public class RobotContainer {
     // Operator indexer controls (ungated feed + auto-spinup)
     op.leftTrigger(0.5)
         .onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)))
-        .whileTrue(indexer.feedCommand());
+        .whileTrue(indexer.feedUngatedCommand());
 
     // Left bumper: Spin up shooter (toggle on)
     op.leftBumper().onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)));
@@ -394,23 +394,8 @@ public class RobotContainer {
                   shooter.setGoal(Shooter.Goal.SHOOT);
                 }));
 
-    // Operator X: Full eject (reverse shooter + indexer + intake rollers)
-    op.x()
-        .whileTrue(
-            Commands.startEnd(
-                () -> {
-                  shooter.setGoal(Shooter.Goal.EJECT);
-                  indexer.setGoal(Indexer.Goal.EJECT);
-                  intake.setGoal(Intake.Goal.EJECT);
-                },
-                () -> {
-                  shooter.setGoal(Shooter.Goal.IDLE);
-                  indexer.setGoal(Indexer.Goal.IDLE);
-                  intake.setGoal(Intake.Goal.IDLE);
-                },
-                shooter,
-                indexer,
-                intake));
+    // Operator X: Eject (reverse indexer only)
+    op.x().whileTrue(indexer.ejectCommand());
 
     // Rumble both controllers 2 seconds before our hub's active shift starts
     new Trigger(() -> GameData.isHubActivatingSoon(2.0))
