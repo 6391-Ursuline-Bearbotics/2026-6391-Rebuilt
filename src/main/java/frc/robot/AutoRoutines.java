@@ -189,6 +189,9 @@ public class AutoRoutines {
                 // Cross back over bump via Choreo trajectory
                 bumpReturn.cmd(),
 
+                // Sprint to final shooting position after bump (corrects positional error from bump crossing)
+                sprintToPose(bumpReturn.getFinalPose().orElse(new Pose2d())).withTimeout(2.0),
+
                 // Fine-tune aim (back at hub) before shooting
                 aimBackAtHub().withTimeout(1.0),
 
