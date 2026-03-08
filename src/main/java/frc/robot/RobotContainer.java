@@ -639,4 +639,9 @@ public class RobotContainer {
   public AutoFactory getAutoFactory() {
     return autoFactory;
   }
+
+  /** Returns the name of the currently selected autonomous routine for logging. */
+  public String getSelectedAutoName() {
+    return autoChooser.selectedCommand().getName();
+  }
 }
