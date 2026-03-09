@@ -394,8 +394,16 @@ public class RobotContainer {
                   shooter.setGoal(Shooter.Goal.SHOOT);
                 }));
 
-    // Operator X: Eject (reverse indexer only)
-    op.x().whileTrue(indexer.ejectCommand());
+    // Operator X: Eject (reverse indexer + deploy intake in reverse, restore previous state on release)
+    op.x()
+        .whileTrue(
+            Commands.startEnd(
+                    () -> {
+                      intakeGoalBeforeEject = intake.getGoal();
+                      intake.setGoal(Intake.Goal.EJECT);
+                    },
+                    () -> intake.setGoal(intakeGoalBeforeEject))
+                .alongWith(indexer.ejectCommand()));
 
     // Rumble both controllers 2 seconds before our hub's active shift starts
     new Trigger(() -> GameData.isHubActivatingSoon(2.0))
@@ -457,6 +465,9 @@ public class RobotContainer {
                                 drive.getRotation().minus(Rotation2d.fromDegrees(-90)).getRadians())
                             < kDpadSnapTolerance));
   }
+
+  // Intake goal saved before an eject so it can be restored on release
+  private Intake.Goal intakeGoalBeforeEject = Intake.Goal.IDLE;
 
   // Drive mode helper methods
   private final ProfiledPIDController snakeAngleController =
