@@ -371,7 +371,7 @@ public class Intake extends SubsystemBase {
    * parallel with other intake goal commands.
    */
   public Command periodicAutoRehomeCommand() {
-    return Commands.sequence(Commands.waitSeconds(2.0), Commands.runOnce(() -> setGoal(Goal.IDLE)))
+    return Commands.sequence(Commands.waitSeconds(1.5), Commands.runOnce(() -> setGoal(Goal.IDLE)))
         .repeatedly()
         .withName("Intake Periodic Auto Rehome");
   }

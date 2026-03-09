@@ -23,6 +23,7 @@ import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj.GenericHID;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -357,11 +358,17 @@ public class RobotContainer {
                           shooter.setGoal(Shooter.Goal.SHOOT);
                           currentDriveMode = DriveMode.AIM_TARGET;
                           aimTargetController.reset(drive.getRotation().getRadians());
+                          autoAimGyrating = true;
                         }),
                     Commands.waitUntil(() -> shooter.isAtSetpoint() && isAimedAtTarget()),
                     Commands.run(() -> indexer.setGoal(Indexer.Goal.FEED))
                         .finallyDo(() -> indexer.setGoal(Indexer.Goal.IDLE)))
-                .finallyDo(() -> currentDriveMode = DriveMode.STANDARD));
+                .finallyDo(
+                    () -> {
+                      currentDriveMode = DriveMode.STANDARD;
+                      autoAimGyrating = false;
+                    })
+                .alongWith(intake.periodicAutoRehomeCommand()));
 
     // DPAD: Manual distance setpoint + spin up shooter
     // Left = 5ft, Right = 10ft, Up = +0.5ft, Down = -0.5ft
@@ -470,6 +477,11 @@ public class RobotContainer {
   // Intake goal saved before an eject so it can be restored on release
   private Intake.Goal intakeGoalBeforeEject = Intake.Goal.IDLE;
 
+  // Lateral gyration during auto-aim shoot
+  private boolean autoAimGyrating = false;
+  private static final double kGyrationAmplitudeM = Units.inchesToMeters(0.25);
+  private static final double kGyrationFreqHz = 2.0;
+
   // Drive mode helper methods
   private final ProfiledPIDController snakeAngleController =
       new ProfiledPIDController(5.0, 0.0, 0.4, new TrapezoidProfile.Constraints(6.0, 15.0));
@@ -563,12 +575,21 @@ public class RobotContainer {
         new ChassisSpeeds(
             linearVelocity.getX() * aimMaxSpeed, linearVelocity.getY() * aimMaxSpeed, omega);
 
-    drive.runVelocity(
-        ChassisSpeeds.fromFieldRelativeSpeeds(
-            speeds,
-            isRedAlliance
-                ? drive.getRotation().plus(new Rotation2d(Math.PI))
-                : drive.getRotation()));
+    Rotation2d robotHeading =
+        isRedAlliance ? drive.getRotation().plus(new Rotation2d(Math.PI)) : drive.getRotation();
+    ChassisSpeeds robotRelative = ChassisSpeeds.fromFieldRelativeSpeeds(speeds, robotHeading);
+
+    // Add sinusoidal lateral gyration (~0.25 in each direction) while shoot trigger is held
+    if (autoAimGyrating) {
+      robotRelative.vyMetersPerSecond +=
+          kGyrationAmplitudeM
+              * 2.0
+              * Math.PI
+              * kGyrationFreqHz
+              * Math.cos(2.0 * Math.PI * kGyrationFreqHz * Timer.getFPGATimestamp());
+    }
+
+    drive.runVelocity(robotRelative);
   }
 
   private static final double kAimToleranceRad = Math.toRadians(5.0);
