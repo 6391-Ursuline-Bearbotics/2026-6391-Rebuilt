@@ -64,6 +64,7 @@ import frc.robot.subsystems.vision.Vision;
 import frc.robot.subsystems.vision.VisionIO;
 import frc.robot.subsystems.vision.VisionIOLimelight;
 import frc.robot.subsystems.vision.VisionIOPhotonVisionSim;
+import frc.robot.util.LoggedTunableNumber;
 
 /**
  * This class is where the bulk of the robot should be declared. Since Command-based is a
@@ -479,8 +480,10 @@ public class RobotContainer {
 
   // Lateral gyration during auto-aim shoot
   private boolean autoAimGyrating = false;
-  private static final double kGyrationAmplitudeM = Units.inchesToMeters(0.25);
-  private static final double kGyrationFreqHz = 2.0;
+  private static final LoggedTunableNumber gyrationAmplitudeInches =
+      new LoggedTunableNumber("Shooter/GyrationAmplitudeInches", 0.75);
+  private static final LoggedTunableNumber gyrationFreqHz =
+      new LoggedTunableNumber("Shooter/GyrationFreqHz", 10.0);
 
   // Drive mode helper methods
   private final ProfiledPIDController snakeAngleController =
@@ -579,14 +582,16 @@ public class RobotContainer {
         isRedAlliance ? drive.getRotation().plus(new Rotation2d(Math.PI)) : drive.getRotation();
     ChassisSpeeds robotRelative = ChassisSpeeds.fromFieldRelativeSpeeds(speeds, robotHeading);
 
-    // Add sinusoidal lateral gyration (~0.25 in each direction) while shoot trigger is held
+    // Add sinusoidal lateral gyration while shoot trigger is held
     if (autoAimGyrating) {
+      double ampM = Units.inchesToMeters(gyrationAmplitudeInches.get());
+      double freqHz = gyrationFreqHz.get();
       robotRelative.vyMetersPerSecond +=
-          kGyrationAmplitudeM
+          ampM
               * 2.0
               * Math.PI
-              * kGyrationFreqHz
-              * Math.cos(2.0 * Math.PI * kGyrationFreqHz * Timer.getFPGATimestamp());
+              * freqHz
+              * Math.cos(2.0 * Math.PI * freqHz * Timer.getFPGATimestamp());
     }
 
     drive.runVelocity(robotRelative);
