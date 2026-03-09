@@ -85,9 +85,6 @@ public class Robot extends LoggedRobot {
     // the Command-based framework to work.
     CommandScheduler.getInstance().run();
 
-    // Log selected auto routine name so it is visible in AdvantageScope logs
-    Logger.recordOutput("AutoChooser/SelectedAuto", robotContainer.getSelectedAutoName());
-
     // Return to non-RT thread priority (do not modify the first argument)
     // Threads.setCurrentThreadPriority(false, 10);
   }
@@ -108,6 +105,9 @@ public class Robot extends LoggedRobot {
     // schedule the autonomous command (example)
     if (autonomousCommand != null) {
       CommandScheduler.getInstance().schedule(autonomousCommand);
+
+      // Log selected auto routine name so it is visible in AdvantageScope logs
+      Logger.recordOutput("AutoChooser/SelectedAuto", robotContainer.getSelectedAutoName());
     }
   }
 
