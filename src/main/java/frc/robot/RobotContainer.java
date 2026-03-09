@@ -394,7 +394,8 @@ public class RobotContainer {
                   shooter.setGoal(Shooter.Goal.SHOOT);
                 }));
 
-    // Operator X: Eject (reverse indexer + deploy intake in reverse, restore previous state on release)
+    // Operator X: Eject (reverse indexer + deploy intake in reverse, restore previous state on
+    // release)
     op.x()
         .whileTrue(
             Commands.startEnd(
