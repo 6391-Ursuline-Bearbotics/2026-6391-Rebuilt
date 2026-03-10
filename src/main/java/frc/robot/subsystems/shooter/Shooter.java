@@ -57,6 +57,11 @@ public class Shooter extends SubsystemBase {
   private static final LoggedTunableNumber shootOnMoveEnabled =
       new LoggedTunableNumber("Shooter/ShootOnMoveEnabled", 1.0);
 
+  // Pitch compensation
+  private static final double kPitchDeadZoneRad = 0.045;
+  private static final LoggedTunableNumber pitchMultiplier =
+      new LoggedTunableNumber("Shooter/PitchMultiplier", 1.0);
+
   // Tunable jam detection parameters
   private static final LoggedTunableNumber jamCurrentThreshold =
       new LoggedTunableNumber("Shooter/JamCurrentThreshold", ShooterConstants.jamCurrentThreshold);
@@ -75,9 +80,10 @@ public class Shooter extends SubsystemBase {
   private final ShooterHoodIO hoodIO;
   private final ShooterHoodIOInputsAutoLogged hoodInputs = new ShooterHoodIOInputsAutoLogged();
 
-  // Pose and speed suppliers from drive
+  // Pose, speed, and pitch suppliers from drive
   private final Supplier<Pose2d> poseSupplier;
   private final Supplier<ChassisSpeeds> fieldSpeedsSupplier;
+  private final Supplier<Double> pitchSupplier;
 
   // Interpolation tables
   private final InterpolatingDoubleTreeMap distanceToRPM;
@@ -118,12 +124,14 @@ public class Shooter extends SubsystemBase {
       ShooterHoodIO hoodIO,
       Supplier<Pose2d> poseSupplier,
       Supplier<ChassisSpeeds> fieldSpeedsSupplier,
-      Supplier<Boolean> indexerFeedingSupplier) {
+      Supplier<Boolean> indexerFeedingSupplier,
+      Supplier<Double> pitchSupplier) {
     this.io = io;
     this.hoodIO = hoodIO;
     this.poseSupplier = poseSupplier;
     this.fieldSpeedsSupplier = fieldSpeedsSupplier;
     this.indexerFeedingSupplier = indexerFeedingSupplier;
+    this.pitchSupplier = pitchSupplier;
     this.distanceToRPM = ShooterConstants.createDistanceToRPMMap();
     this.distanceToAngle = ShooterConstants.createDistanceToAngleMap();
     this.distanceToTOF = ShooterConstants.createDistanceToTOFMap();
@@ -352,7 +360,17 @@ public class Shooter extends SubsystemBase {
     if (rpmOverride.get() != 0.0) {
       return rpmOverride.get();
     }
-    return distanceToRPM.get(distanceToTarget);
+    double baseRPM = distanceToRPM.get(distanceToTarget);
+
+    // Apply pitch compensation outside the dead zone
+    double pitch = pitchSupplier.get();
+    if (Math.abs(pitch) > kPitchDeadZoneRad) {
+      double adjustment = baseRPM * (Math.abs(pitch) * pitchMultiplier.get());
+      baseRPM += pitch < 0 ? -adjustment : adjustment;
+    }
+    Logger.recordOutput("Shooter/PitchCompensatedRPM", baseRPM);
+
+    return baseRPM;
   }
 
   /**

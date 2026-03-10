@@ -143,13 +143,15 @@ public class RobotContainer {
                     new ShooterHoodIOServo(),
                     drive::getPose,
                     drive::getFieldRelativeSpeeds,
-                    () -> indexer.getGoal() == Indexer.Goal.FEED)
+                    () -> indexer.getGoal() == Indexer.Goal.FEED,
+                    drive::getPitch)
                 : new Shooter(
                     new ShooterIO() {},
                     new ShooterHoodIO() {},
                     drive::getPose,
                     drive::getFieldRelativeSpeeds,
-                    () -> indexer.getGoal() == Indexer.Goal.FEED);
+                    () -> indexer.getGoal() == Indexer.Goal.FEED,
+                    drive::getPitch);
 
         break;
 
@@ -174,7 +176,8 @@ public class RobotContainer {
                 new ShooterHoodIOSim(),
                 drive::getPose,
                 drive::getFieldRelativeSpeeds,
-                () -> indexer.getGoal() == Indexer.Goal.FEED);
+                () -> indexer.getGoal() == Indexer.Goal.FEED,
+                drive::getPitch);
         break;
 
       default:
@@ -195,7 +198,8 @@ public class RobotContainer {
                 new ShooterHoodIO() {},
                 drive::getPose,
                 drive::getFieldRelativeSpeeds,
-                () -> indexer.getGoal() == Indexer.Goal.FEED);
+                () -> indexer.getGoal() == Indexer.Goal.FEED,
+                drive::getPitch);
         break;
     }
 
