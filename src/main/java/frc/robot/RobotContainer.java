@@ -65,6 +65,7 @@ import frc.robot.subsystems.vision.VisionIO;
 import frc.robot.subsystems.vision.VisionIOLimelight;
 import frc.robot.subsystems.vision.VisionIOPhotonVisionSim;
 import frc.robot.util.LoggedTunableNumber;
+import org.littletonrobotics.junction.Logger;
 
 /**
  * This class is where the bulk of the robot should be declared. Since Command-based is a
@@ -485,9 +486,9 @@ public class RobotContainer {
   // Lateral gyration during auto-aim shoot
   private boolean autoAimGyrating = false;
   private static final LoggedTunableNumber gyrationAmplitudeInches =
-      new LoggedTunableNumber("Shooter/GyrationAmplitudeInches", 0.75);
+      new LoggedTunableNumber("Shooter/GyrationAmplitudeInches", 0.50);
   private static final LoggedTunableNumber gyrationFreqHz =
-      new LoggedTunableNumber("Shooter/GyrationFreqHz", 10.0);
+      new LoggedTunableNumber("Shooter/GyrationFreqHz", 5.0);
 
   // Drive mode helper methods
   private final ProfiledPIDController snakeAngleController =
@@ -601,7 +602,7 @@ public class RobotContainer {
     drive.runVelocity(robotRelative);
   }
 
-  private static final double kAimToleranceRad = Math.toRadians(5.0);
+  private static final double kAimToleranceRad = Math.toRadians(6.5);
 
   /**
    * Returns true when the robot's shooter is pointed within tolerance of the current aim target.
@@ -620,7 +621,10 @@ public class RobotContainer {
     Translation2d robotToTarget = target.minus(robotPosition);
     double targetHeading = Math.atan2(robotToTarget.getY(), robotToTarget.getX()) + Math.PI;
     double error = MathUtil.angleModulus(targetHeading - drive.getRotation().getRadians());
-    return Math.abs(error) < kAimToleranceRad;
+    boolean aimed = Math.abs(error) < kAimToleranceRad;
+    Logger.recordOutput("Shooter/AimErrorDeg", Math.toDegrees(error));
+    Logger.recordOutput("Shooter/AimedAtTarget", aimed);
+    return aimed;
   }
 
   private Translation2d getLinearVelocityFromJoysticks() {
