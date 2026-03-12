@@ -12,8 +12,8 @@ public final class IntakeConstants {
   // Deploy motor
   public static final double deployGearRatio = 25.0;
   public static final boolean deployMotorInverted = false;
-  public static final double deployVoltage = 2.0;
-  public static final double retractVoltage = -3.0;
+  public static final double deployVoltage = 2.8;
+  public static final double retractVoltage = -2.8;
   public static final double deployCurrentThreshold = 30.0; // Stator amps indicating hard stop
   public static final double retractCurrentThreshold =
       45.0; // Stator amps indicating retracted hard stop (20% more than deploy)
