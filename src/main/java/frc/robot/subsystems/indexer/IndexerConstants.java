@@ -32,6 +32,16 @@ public final class IndexerConstants {
   public static final double jamDebounceTime = 0.5; // Seconds
   public static final double jamReverseTime = 0.25; // Seconds to reverse
 
+  // Spinner motors (NEO 550 + SparkMAX)
+  public static final int leftSpinnerMotorId = 9;
+  public static final int rightSpinnerMotorId = 10;
+  public static final double spinnerGearRatio = 12.0 / 60.0; // 12:60 reduction
+  public static final double spinnerSpeed = 0.5; // duty cycle, -1.0 to 1.0
+  public static final double spinnerDelaySeconds = 0.5; // delay after kicker/belt start
+  public static final double spinnerStallCurrentAmps = 15.0; // stall detection threshold
+  public static final double spinnerCooldownSeconds = 1.0; // off-time after stall
+  public static final int spinnerCurrentLimitAmps = 20; // smart current limit (NEO 550 max ~20A)
+
   // Simulation
   public static final double beltSimMOI = 0.001;
   public static final double kickerSimMOI = 0.001;

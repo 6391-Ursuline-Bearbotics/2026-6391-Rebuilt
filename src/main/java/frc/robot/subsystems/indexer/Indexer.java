@@ -17,6 +17,21 @@ import org.littletonrobotics.junction.AutoLogOutput;
 import org.littletonrobotics.junction.Logger;
 
 public class Indexer extends SubsystemBase {
+  // Tunable spinner parameters
+  private static final LoggedTunableNumber spinnerSpeed =
+      new LoggedTunableNumber("Indexer/Spinner/Speed", IndexerConstants.spinnerSpeed);
+  private static final LoggedTunableNumber spinnerDelay =
+      new LoggedTunableNumber("Indexer/Spinner/DelaySeconds", IndexerConstants.spinnerDelaySeconds);
+  private static final LoggedTunableNumber spinnerStallCurrent =
+      new LoggedTunableNumber(
+          "Indexer/Spinner/StallCurrentAmps", IndexerConstants.spinnerStallCurrentAmps);
+  private static final LoggedTunableNumber spinnerCooldown =
+      new LoggedTunableNumber(
+          "Indexer/Spinner/CooldownSeconds", IndexerConstants.spinnerCooldownSeconds);
+  private static final LoggedTunableNumber spinnerCurrentLimit =
+      new LoggedTunableNumber(
+          "Indexer/Spinner/CurrentLimitAmps", IndexerConstants.spinnerCurrentLimitAmps);
+
   // Tunable belt gains
   private static final LoggedTunableNumber beltKp = new LoggedTunableNumber("Indexer/Belt/kP", 0.1);
   private static final LoggedTunableNumber beltKv =
@@ -61,6 +76,8 @@ public class Indexer extends SubsystemBase {
   private final IndexerKickerIO kickerIO;
   private final IndexerKickerIOInputsAutoLogged kickerInputs =
       new IndexerKickerIOInputsAutoLogged();
+  private final SpinnersIO spinnersIO;
+  private final SpinnersIOInputsAutoLogged spinnersInputs = new SpinnersIOInputsAutoLogged();
 
   // Pose supplier for game data gating
   private final Supplier<Pose2d> poseSupplier;
@@ -75,6 +92,12 @@ public class Indexer extends SubsystemBase {
   private boolean jammed = false;
   private Goal goalBeforeJam = Goal.IDLE;
 
+  // Spinner state
+  private final Timer spinnerDelayTimer = new Timer();
+  private boolean spinnerDelayStarted = false;
+  private final Timer spinnerCooldownTimer = new Timer();
+  private boolean spinnerInCooldown = false;
+
   // Alerts
   private final Alert beltDisconnectedAlert =
       new Alert("Indexer belt motor disconnected.", AlertType.kError);
@@ -85,12 +108,22 @@ public class Indexer extends SubsystemBase {
   private final Alert kickerOverTempAlert =
       new Alert("Indexer kicker motor over temperature.", AlertType.kWarning);
   private final Alert jamAlert = new Alert("Indexer jam detected.", AlertType.kWarning);
+  private final Alert leftSpinnerDisconnectedAlert =
+      new Alert("Left spinner motor disconnected.", AlertType.kError);
+  private final Alert rightSpinnerDisconnectedAlert =
+      new Alert("Right spinner motor disconnected.", AlertType.kError);
 
-  public Indexer(IndexerBeltIO beltIO, IndexerKickerIO kickerIO, Supplier<Pose2d> poseSupplier) {
+  public Indexer(
+      IndexerBeltIO beltIO,
+      IndexerKickerIO kickerIO,
+      SpinnersIO spinnersIO,
+      Supplier<Pose2d> poseSupplier) {
     this.beltIO = beltIO;
     this.kickerIO = kickerIO;
+    this.spinnersIO = spinnersIO;
     this.poseSupplier = poseSupplier;
     jamTimer.start();
+    spinnersIO.setCurrentLimit(IndexerConstants.spinnerCurrentLimitAmps);
   }
 
   public void setGoal(Goal goal) {
@@ -109,11 +142,14 @@ public class Indexer extends SubsystemBase {
     Logger.processInputs("Indexer/Belt", beltInputs);
     kickerIO.updateInputs(kickerInputs);
     Logger.processInputs("Indexer/Kicker", kickerInputs);
+    spinnersIO.updateInputs(spinnersInputs);
+    Logger.processInputs("Indexer/Spinners", spinnersInputs);
 
     // Stop everything when disabled
     if (DriverStation.isDisabled()) {
       beltIO.stop();
       kickerIO.stop();
+      spinnersIO.stop();
       updateAlerts();
       return;
     }
@@ -196,6 +232,44 @@ public class Indexer extends SubsystemBase {
       jammed = false;
     }
 
+    // Update spinner current limit if tuned
+    LoggedTunableNumber.ifChanged(
+        hashCode() + 2, values -> spinnersIO.setCurrentLimit((int) values[0]), spinnerCurrentLimit);
+
+    // Spinner logic: turn on 0.5s after kicker/belt, with stall auto-recovery
+    if (motorsActive) {
+      if (!spinnerDelayStarted) {
+        spinnerDelayTimer.restart();
+        spinnerDelayStarted = true;
+      }
+      if (spinnerDelayTimer.hasElapsed(spinnerDelay.get())) {
+        boolean leftStall =
+            spinnersInputs.leftCurrentAmps > spinnerStallCurrent.get()
+                && Math.abs(spinnersInputs.leftVelocityRPM) < 11000.0 * spinnerSpeed.get() * 0.1;
+        boolean rightStall =
+            spinnersInputs.rightCurrentAmps > spinnerStallCurrent.get()
+                && Math.abs(spinnersInputs.rightVelocityRPM) < 11000.0 * spinnerSpeed.get() * 0.1;
+
+        if (spinnerInCooldown) {
+          spinnersIO.stop();
+          if (spinnerCooldownTimer.hasElapsed(spinnerCooldown.get())) {
+            spinnerInCooldown = false;
+          }
+        } else if (leftStall || rightStall) {
+          spinnerInCooldown = true;
+          spinnerCooldownTimer.restart();
+          spinnersIO.stop();
+        } else {
+          spinnersIO.setSpeed(spinnerSpeed.get());
+        }
+      }
+      // else still in delay window — leave spinners stopped
+    } else {
+      spinnersIO.stop();
+      spinnerDelayStarted = false;
+      spinnerInCooldown = false;
+    }
+
     updateAlerts();
   }
 
@@ -210,6 +284,10 @@ public class Indexer extends SubsystemBase {
     beltOverTempAlert.set(beltInputs.tempCelsius > 80.0);
     kickerOverTempAlert.set(kickerInputs.tempCelsius > 80.0);
     jamAlert.set(jammed);
+    leftSpinnerDisconnectedAlert.set(
+        !spinnersInputs.leftConnected && Constants.currentMode != Mode.SIM);
+    rightSpinnerDisconnectedAlert.set(
+        !spinnersInputs.rightConnected && Constants.currentMode != Mode.SIM);
   }
 
   private static double rpmToRadPerSec(double rpm) {
