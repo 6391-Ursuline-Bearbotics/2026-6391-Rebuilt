@@ -145,11 +145,13 @@ public class Indexer extends SubsystemBase {
     spinnersIO.updateInputs(spinnersInputs);
     Logger.processInputs("Indexer/Spinners", spinnersInputs);
 
-    // Stop everything when disabled
+    // Stop everything when disabled and reset spinner state so it re-initializes cleanly on enable
     if (DriverStation.isDisabled()) {
       beltIO.stop();
       kickerIO.stop();
       spinnersIO.stop();
+      spinnerDelayStarted = false;
+      spinnerInCooldown = false;
       updateAlerts();
       return;
     }
@@ -208,9 +210,11 @@ public class Indexer extends SubsystemBase {
 
     // Handle jam state
     if (jammed) {
-      // Reversing both motors to clear jam
+      // Reversing both motors to clear jam — stop spinners to avoid conflicting ball flow
       beltIO.setVelocity(rpmToRadPerSec(beltEjectRPM.get()));
       kickerIO.setVelocity(rpmToRadPerSec(kickerEjectRPM.get()));
+      spinnersIO.stop();
+      spinnerDelayStarted = false;
       if (jamReverseTimer.hasElapsed(jamReverseTime.get())) {
         // Done reversing, resume previous goal
         jammed = false;
