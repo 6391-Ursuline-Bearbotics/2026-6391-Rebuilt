@@ -29,14 +29,14 @@ public class SpinnersIOSparkMax implements SpinnersIO {
     leftEncoder = leftMotor.getEncoder();
     rightEncoder = rightMotor.getEncoder();
 
-    applyConfig(leftMotor, true);
-    applyConfig(rightMotor, false);
+    applyConfig(leftMotor, true, PersistMode.kPersistParameters);
+    applyConfig(rightMotor, false, PersistMode.kPersistParameters);
   }
 
-  private void applyConfig(SparkMax motor, boolean inverted) {
+  private void applyConfig(SparkMax motor, boolean inverted, PersistMode persistMode) {
     SparkMaxConfig config = new SparkMaxConfig();
     config.idleMode(IdleMode.kBrake).inverted(inverted).smartCurrentLimit(currentLimitAmps);
-    motor.configure(config, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
+    motor.configure(config, ResetMode.kResetSafeParameters, persistMode);
   }
 
   @Override
@@ -71,7 +71,8 @@ public class SpinnersIOSparkMax implements SpinnersIO {
   public void setCurrentLimit(int amps) {
     if (amps == currentLimitAmps) return;
     currentLimitAmps = amps;
-    applyConfig(leftMotor, true);
-    applyConfig(rightMotor, false);
+    // kNoPersistParameters avoids flash writes on dynamic runtime changes
+    applyConfig(leftMotor, true, PersistMode.kNoPersistParameters);
+    applyConfig(rightMotor, false, PersistMode.kNoPersistParameters);
   }
 }

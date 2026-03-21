@@ -40,7 +40,9 @@ public final class IndexerConstants {
   public static final double spinnerDelaySeconds = 0.5; // delay after kicker/belt start
   public static final double spinnerStallCurrentAmps = 15.0; // stall detection threshold
   public static final double spinnerCooldownSeconds = 1.0; // off-time after stall
-  public static final int spinnerCurrentLimitAmps = 20; // smart current limit (NEO 550 max ~20A)
+  public static final int spinnerCurrentLimitAmps = 20; // sustained smart current limit
+  public static final int spinnerInrushCurrentAmps = 40; // brief startup inrush allowance
+  public static final double spinnerInrushTimeSeconds = 0.35; // how long inrush is permitted
 
   // Simulation
   public static final double beltSimMOI = 0.001;

@@ -31,6 +31,12 @@ public class Indexer extends SubsystemBase {
   private static final LoggedTunableNumber spinnerCurrentLimit =
       new LoggedTunableNumber(
           "Indexer/Spinner/CurrentLimitAmps", IndexerConstants.spinnerCurrentLimitAmps);
+  private static final LoggedTunableNumber spinnerInrushCurrent =
+      new LoggedTunableNumber(
+          "Indexer/Spinner/InrushCurrentAmps", IndexerConstants.spinnerInrushCurrentAmps);
+  private static final LoggedTunableNumber spinnerInrushTime =
+      new LoggedTunableNumber(
+          "Indexer/Spinner/InrushTimeSeconds", IndexerConstants.spinnerInrushTimeSeconds);
 
   // Tunable belt gains
   private static final LoggedTunableNumber beltKp = new LoggedTunableNumber("Indexer/Belt/kP", 0.1);
@@ -97,6 +103,9 @@ public class Indexer extends SubsystemBase {
   private boolean spinnerDelayStarted = false;
   private final Timer spinnerCooldownTimer = new Timer();
   private boolean spinnerInCooldown = false;
+  private boolean spinnerNeedsInrush = true; // true whenever motors were last stopped
+  private boolean spinnerInrushActive = false;
+  private final Timer spinnerInrushTimer = new Timer();
 
   // Alerts
   private final Alert beltDisconnectedAlert =
@@ -152,6 +161,8 @@ public class Indexer extends SubsystemBase {
       spinnersIO.stop();
       spinnerDelayStarted = false;
       spinnerInCooldown = false;
+      spinnerNeedsInrush = true;
+      spinnerInrushActive = false;
       updateAlerts();
       return;
     }
@@ -215,6 +226,8 @@ public class Indexer extends SubsystemBase {
       kickerIO.setVelocity(rpmToRadPerSec(kickerEjectRPM.get()));
       spinnersIO.stop();
       spinnerDelayStarted = false;
+      spinnerNeedsInrush = true;
+      spinnerInrushActive = false;
       if (jamReverseTimer.hasElapsed(jamReverseTime.get())) {
         // Done reversing, resume previous goal
         jammed = false;
@@ -262,8 +275,20 @@ public class Indexer extends SubsystemBase {
         } else if (leftStall || rightStall) {
           spinnerInCooldown = true;
           spinnerCooldownTimer.restart();
+          spinnerNeedsInrush = true;
+          spinnerInrushActive = false;
           spinnersIO.stop();
         } else {
+          // Apply inrush current on the first cycle after each stop, then revert to normal limit
+          if (spinnerNeedsInrush) {
+            spinnersIO.setCurrentLimit((int) spinnerInrushCurrent.get());
+            spinnerInrushTimer.restart();
+            spinnerNeedsInrush = false;
+            spinnerInrushActive = true;
+          } else if (spinnerInrushActive && spinnerInrushTimer.hasElapsed(spinnerInrushTime.get())) {
+            spinnersIO.setCurrentLimit((int) spinnerCurrentLimit.get());
+            spinnerInrushActive = false;
+          }
           spinnersIO.setSpeed(spinnerSpeed.get());
         }
       }
@@ -272,6 +297,8 @@ public class Indexer extends SubsystemBase {
       spinnersIO.stop();
       spinnerDelayStarted = false;
       spinnerInCooldown = false;
+      spinnerNeedsInrush = true;
+      spinnerInrushActive = false;
     }
 
     updateAlerts();
