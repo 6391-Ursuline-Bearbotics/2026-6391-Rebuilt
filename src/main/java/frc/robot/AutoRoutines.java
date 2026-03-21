@@ -165,11 +165,11 @@ public class AutoRoutines {
                 // Optionally shoot preloaded ball first
                 shootFirstSequence,
 
+                // Deploy intake before crossing bump
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
+
                 // Cross the bump via Choreo trajectory
                 bump.cmd(),
-
-                // Deploy intake after crossing bump
-                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
 
                 // PID to double pass trajectory start
                 sprintToPose(doublePass.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
