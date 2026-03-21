@@ -260,12 +260,19 @@ public class Indexer extends SubsystemBase {
         spinnerDelayStarted = true;
       }
       if (spinnerDelayTimer.hasElapsed(spinnerDelay.get())) {
+        // Suppress stall detection during startup (before and throughout inrush window) so normal
+        // spin-up current + low velocity does not false-trip into cooldown
+        boolean inStartup = spinnerNeedsInrush || spinnerInrushActive;
         boolean leftStall =
-            spinnersInputs.leftCurrentAmps > spinnerStallCurrent.get()
-                && Math.abs(spinnersInputs.leftVelocityRPM) < 11000.0 * spinnerSpeed.get() * 0.1;
+            !inStartup
+                && spinnersInputs.leftCurrentAmps > spinnerStallCurrent.get()
+                && Math.abs(spinnersInputs.leftVelocityRPM)
+                    < 11000.0 * spinnerSpeed.get() * 0.1;
         boolean rightStall =
-            spinnersInputs.rightCurrentAmps > spinnerStallCurrent.get()
-                && Math.abs(spinnersInputs.rightVelocityRPM) < 11000.0 * spinnerSpeed.get() * 0.1;
+            !inStartup
+                && spinnersInputs.rightCurrentAmps > spinnerStallCurrent.get()
+                && Math.abs(spinnersInputs.rightVelocityRPM)
+                    < 11000.0 * spinnerSpeed.get() * 0.1;
 
         if (spinnerInCooldown) {
           spinnersIO.stop();
