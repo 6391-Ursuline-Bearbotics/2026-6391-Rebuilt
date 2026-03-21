@@ -285,7 +285,8 @@ public class Indexer extends SubsystemBase {
             spinnerInrushTimer.restart();
             spinnerNeedsInrush = false;
             spinnerInrushActive = true;
-          } else if (spinnerInrushActive && spinnerInrushTimer.hasElapsed(spinnerInrushTime.get())) {
+          } else if (spinnerInrushActive
+              && spinnerInrushTimer.hasElapsed(spinnerInrushTime.get())) {
             spinnersIO.setCurrentLimit((int) spinnerCurrentLimit.get());
             spinnerInrushActive = false;
           }
