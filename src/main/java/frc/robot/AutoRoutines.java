@@ -96,6 +96,30 @@ public class AutoRoutines {
         "Depot Double Pass Shoot First", "DepotBump", "DepotDoublePass", "DepotBumpReturn", true);
   }
 
+  public AutoRoutine outpostSinglePass() {
+    return buildDoublePass(
+        "Outpost Single Pass", "OutpostBump", "OutpostSinglePass", "OutpostBumpReturn", false);
+  }
+
+  public AutoRoutine outpostSinglePassShootFirst() {
+    return buildDoublePass(
+        "Outpost Single Pass Shoot First",
+        "OutpostBump",
+        "OutpostSinglePass",
+        "OutpostBumpReturn",
+        true);
+  }
+
+  public AutoRoutine depotSinglePass() {
+    return buildDoublePass(
+        "Depot Single Pass", "DepotBump", "DepotSinglePass", "DepotBumpReturn", false);
+  }
+
+  public AutoRoutine depotSinglePassShootFirst() {
+    return buildDoublePass(
+        "Depot Single Pass Shoot First", "DepotBump", "DepotSinglePass", "DepotBumpReturn", true);
+  }
+
   public AutoRoutine safe() {
     return buildSafe("Safe", false);
   }

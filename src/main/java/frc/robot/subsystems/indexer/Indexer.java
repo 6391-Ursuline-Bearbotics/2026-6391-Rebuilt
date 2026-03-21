@@ -266,13 +266,11 @@ public class Indexer extends SubsystemBase {
         boolean leftStall =
             !inStartup
                 && spinnersInputs.leftCurrentAmps > spinnerStallCurrent.get()
-                && Math.abs(spinnersInputs.leftVelocityRPM)
-                    < 11000.0 * spinnerSpeed.get() * 0.1;
+                && Math.abs(spinnersInputs.leftVelocityRPM) < 11000.0 * spinnerSpeed.get() * 0.1;
         boolean rightStall =
             !inStartup
                 && spinnersInputs.rightCurrentAmps > spinnerStallCurrent.get()
-                && Math.abs(spinnersInputs.rightVelocityRPM)
-                    < 11000.0 * spinnerSpeed.get() * 0.1;
+                && Math.abs(spinnersInputs.rightVelocityRPM) < 11000.0 * spinnerSpeed.get() * 0.1;
 
         if (spinnerInCooldown) {
           spinnersIO.stop();
