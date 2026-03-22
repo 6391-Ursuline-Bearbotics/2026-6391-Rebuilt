@@ -217,12 +217,14 @@ public class AutoRoutines {
                 // crossing)
                 sprintToPose(bumpReturn.getFinalPose().orElse(new Pose2d())).withTimeout(2.0),
 
-                // Fine-tune aim (back at hub) before shooting
-                aimBackAtHub().withTimeout(1.0),
-
-                // Feed and shoot for remaining time
-                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                intake.periodicAutoRehomeCommand().withTimeout(10.0),
+                // Aim at hub continuously while feeding/shooting for remaining time;
+                // deadline ends when the feed sequence finishes
+                Commands.deadline(
+                    Commands.sequence(
+                        Commands.waitSeconds(1.0),
+                        Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                        intake.periodicAutoRehomeCommand().withTimeout(10.0)),
+                    aimBackAtHub()),
 
                 // Cleanup
                 Commands.runOnce(
