@@ -126,9 +126,10 @@ public class AutoRoutines {
   }
 
   /**
-   * Depot Single Pass - Shoot On Move variant. Crosses bump, collects balls on the single pass
-   * trajectory, then shoots while rolling toward the depot at 0.5 m/s. Deploys intake when ~2m from
-   * the depot to suck up additional balls while still firing. Runs until auto ends.
+   * Depot Single Pass - Shoot On Move variant. Crosses bump out, collects balls on the single pass
+   * trajectory, returns over the bump, then shoots while rolling toward the depot at 0.5 m/s from
+   * the alliance side. Deploys intake when ~2m from the depot to collect staged balls while still
+   * firing. Runs until auto ends.
    */
   public AutoRoutine depotSinglePassShootOnMove() {
     AutoRoutine routine = factory.newRoutine("Depot Single Pass Shoot On Move");
@@ -155,31 +156,25 @@ public class AutoRoutines {
                 // Run single pass trajectory with intake collecting balls
                 singlePass.cmd(),
 
-                // Retract intake before crossing back over the bump
+                // Retract intake, spin up shooter, and return over the bump.
+                // The shooter has the full bump-return transit time to reach setpoint.
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
-
-                // Spin up shooter during bump return so it's ready to fire immediately
                 Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
-
-                // PID to bump return trajectory start
-                sprintToPose(bumpReturn.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
-
-                // Cross back over bump via Choreo trajectory
                 bumpReturn.cmd(),
 
-                // Sprint to final position after bump (corrects positional error from bump
-                // crossing)
+                // Correct positional error introduced by bump crossing (same as Shoot First auto)
                 sprintToPose(bumpReturn.getFinalPose().orElse(new Pose2d())).withTimeout(2.0),
 
-                // Brief initial aim to get shooter on-target before feeding
-                aimBackAtHub().withTimeout(0.75),
-
-                // Drive toward depot at 0.5 m/s, shooting on the move.
-                // In parallel, deploy intake once within ~2m of the depot to collect the
-                // staged balls while still firing any remaining balls from the pass.
-                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                // Now on the alliance side: drive toward depot at 0.5 m/s while shooting.
+                // Three branches run in parallel until auto ends:
+                //   1. Drive + heading: translate toward depot, back of robot aimed at hub
+                //   2. Feed: wait for shooter setpoint, then own the indexer in FEED mode
+                //   3. Intake: deploy once within ~2m of the depot for staged balls
                 Commands.parallel(
                     driveTowardDepotAimingAtHub(0.5),
+                    Commands.sequence(
+                        Commands.waitUntil(() -> shooter.isAtSetpoint()),
+                        indexer.feedCommand()),
                     Commands.sequence(
                         Commands.waitUntil(
                             () -> {
