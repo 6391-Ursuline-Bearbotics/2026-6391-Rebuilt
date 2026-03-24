@@ -157,20 +157,24 @@ public class AutoRoutines {
                 singlePass.cmd(),
 
                 // Retract intake, spin up shooter, and return over the bump.
-                // The robot will be back on the alliance side near the hub after this.
+                // The shooter has the full bump-return transit time to reach setpoint.
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
                 Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
                 bumpReturn.cmd(),
 
-                // Brief initial aim to get shooter on-target before feeding
-                aimBackAtHub().withTimeout(0.75),
+                // Correct positional error introduced by bump crossing (same as Shoot First auto)
+                sprintToPose(bumpReturn.getFinalPose().orElse(new Pose2d())).withTimeout(2.0),
 
                 // Now on the alliance side: drive toward depot at 0.5 m/s while shooting.
-                // In parallel, deploy intake once within ~2m of the depot to collect the
-                // 24 staged balls while still firing any remaining balls from the pass.
-                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                // Three branches run in parallel until auto ends:
+                //   1. Drive + heading: translate toward depot, back of robot aimed at hub
+                //   2. Feed: wait for shooter setpoint, then own the indexer in FEED mode
+                //   3. Intake: deploy once within ~2m of the depot for staged balls
                 Commands.parallel(
                     driveTowardDepotAimingAtHub(0.5),
+                    Commands.sequence(
+                        Commands.waitUntil(() -> shooter.isAtSetpoint()),
+                        indexer.feedCommand()),
                     Commands.sequence(
                         Commands.waitUntil(
                             () -> {
