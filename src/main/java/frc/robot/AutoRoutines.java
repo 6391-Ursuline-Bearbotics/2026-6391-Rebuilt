@@ -134,6 +134,7 @@ public class AutoRoutines {
     AutoRoutine routine = factory.newRoutine("Depot Single Pass Shoot On Move");
     AutoTrajectory bump = routine.trajectory("DepotBump");
     AutoTrajectory singlePass = routine.trajectory("DepotSinglePass");
+    AutoTrajectory bumpReturn = routine.trajectory("DepotBumpReturn");
 
     routine
         .active()
@@ -154,11 +155,21 @@ public class AutoRoutines {
                 // Run single pass trajectory with intake collecting balls
                 singlePass.cmd(),
 
-                // Retract intake while we shoot the collected balls en route to the depot
+                // Retract intake before crossing back over the bump
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
 
-                // Spin up shooter
+                // Spin up shooter during bump return so it's ready to fire immediately
                 Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+
+                // PID to bump return trajectory start
+                sprintToPose(bumpReturn.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
+
+                // Cross back over bump via Choreo trajectory
+                bumpReturn.cmd(),
+
+                // Sprint to final position after bump (corrects positional error from bump
+                // crossing)
+                sprintToPose(bumpReturn.getFinalPose().orElse(new Pose2d())).withTimeout(2.0),
 
                 // Brief initial aim to get shooter on-target before feeding
                 aimBackAtHub().withTimeout(0.75),
