@@ -167,27 +167,30 @@ public class AutoRoutines {
 
                 // Now on the alliance side: drive toward depot at 0.5 m/s while shooting.
                 // Three branches run in parallel until auto ends:
-                //   1. Drive + heading: translate toward depot, back of robot aimed at hub
+                //   1. Drive + heading: translate toward depot approach target, back aimed at hub
                 //   2. Feed: wait for shooter setpoint, then own the indexer in FEED mode
-                //   3. Intake: deploy once within ~2m of the depot for staged balls
+                //   3. Intake: jostle balls (periodic rehome) until within ~2m of the depot,
+                //      then deploy to collect staged balls -- mutually exclusive with jostling
                 Commands.parallel(
                     driveTowardDepotAimingAtHub(0.5),
                     Commands.sequence(
                         Commands.waitUntil(() -> shooter.isAtSetpoint()),
                         indexer.feedCommand()),
                     Commands.sequence(
-                        Commands.waitUntil(
-                            () -> {
-                              boolean isRed =
-                                  DriverStation.getAlliance().isPresent()
-                                      && DriverStation.getAlliance().get() == Alliance.Red;
-                              return drive
-                                      .getPose()
-                                      .getTranslation()
-                                      .getDistance(FieldConstants.getDepotCenter(isRed))
-                                  < 2.0;
-                            }),
-                        Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE))))));
+                        intake
+                            .periodicAutoRehomeCommand()
+                            .until(
+                                () -> {
+                                  boolean isRed =
+                                      DriverStation.getAlliance().isPresent()
+                                          && DriverStation.getAlliance().get() == Alliance.Red;
+                                  return drive
+                                          .getPose()
+                                          .getTranslation()
+                                          .getDistance(FieldConstants.getDepotCenter(isRed))
+                                      < 2.0;
+                                }),
+                        Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)))));
 
     return routine;
   }
@@ -428,7 +431,7 @@ public class AutoRoutines {
                   headingController.calculate(current.getRotation().getRadians(), targetHeading);
 
               // Translation: drive toward depot
-              Translation2d depotTarget = FieldConstants.getDepotCenter(isRed);
+              Translation2d depotTarget = FieldConstants.getDepotApproachTarget(isRed);
               Translation2d toDepot = depotTarget.minus(current.getTranslation());
               double driveAngle = Math.atan2(toDepot.getY(), toDepot.getX());
 
