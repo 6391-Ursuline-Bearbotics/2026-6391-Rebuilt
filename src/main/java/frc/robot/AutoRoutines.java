@@ -173,8 +173,7 @@ public class AutoRoutines {
                 Commands.parallel(
                     driveTowardDepotAimingAtHub(0.5),
                     Commands.sequence(
-                        Commands.waitUntil(() -> shooter.isAtSetpoint()),
-                        indexer.feedCommand()),
+                        Commands.waitUntil(() -> shooter.isAtSetpoint()), indexer.feedCommand()),
                     Commands.sequence(
                         Commands.waitUntil(
                             () -> {
