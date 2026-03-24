@@ -96,6 +96,11 @@ public class AutoRoutines {
         "Depot Double Pass Shoot First", "DepotBump", "DepotDoublePass", "DepotBumpReturn", true);
   }
 
+  public AutoRoutine outpostFullPass() {
+    return buildDoublePass(
+        "Outpost FULL Pass", "OutpostBump", "FullOutpostSinglePass", "OutpostBumpReturn", false);
+  }
+
   public AutoRoutine outpostSinglePass() {
     return buildDoublePass(
         "Outpost Single Pass", "OutpostBump", "OutpostSinglePass", "OutpostBumpReturn", false);

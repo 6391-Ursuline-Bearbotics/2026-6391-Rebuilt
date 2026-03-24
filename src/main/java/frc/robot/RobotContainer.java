@@ -237,6 +237,7 @@ public class RobotContainer {
         "Outpost Double Pass (Shoot First)", autoRoutines::outpostDoublePassShootFirst);
     autoChooser.addRoutine(
         "Depot Double Pass (Shoot First)", autoRoutines::depotDoublePassShootFirst);
+    autoChooser.addRoutine("Outpost FULL Pass", autoRoutines::outpostFullPass);
     autoChooser.addRoutine("Outpost Single Pass", autoRoutines::outpostSinglePass);
     autoChooser.addRoutine("Depot Single Pass", autoRoutines::depotSinglePass);
     autoChooser.addRoutine(
