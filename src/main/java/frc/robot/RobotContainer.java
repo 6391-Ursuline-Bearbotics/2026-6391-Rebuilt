@@ -363,10 +363,19 @@ public class RobotContainer {
                   drive.clearMaxSpeedOverride();
                 }));
 
-    // Operator indexer controls (ungated feed + auto-spinup)
+    // Operator indexer controls (ungated feed + auto-spinup + gyration + intake rehome)
     op.leftTrigger(0.5)
-        .onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)))
-        .whileTrue(indexer.feedUngatedCommand());
+        .whileTrue(
+            Commands.sequence(
+                    Commands.runOnce(
+                        () -> {
+                          shooter.setGoal(Shooter.Goal.SHOOT);
+                          autoAimGyrating = true;
+                        }),
+                    Commands.run(() -> indexer.setGoal(Indexer.Goal.FEED))
+                        .finallyDo(() -> indexer.setGoal(Indexer.Goal.IDLE)))
+                .finallyDo(() -> autoAimGyrating = false)
+                .alongWith(intake.periodicAutoRehomeCommand()));
 
     // Left bumper: Spin up shooter (toggle on)
     op.leftBumper().onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)));
