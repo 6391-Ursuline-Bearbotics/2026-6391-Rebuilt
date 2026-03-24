@@ -551,10 +551,24 @@ public class RobotContainer {
     boolean isFlipped =
         DriverStation.getAlliance().isPresent()
             && DriverStation.getAlliance().get() == Alliance.Red;
-    drive.runVelocity(
+    ChassisSpeeds robotRelative =
         ChassisSpeeds.fromFieldRelativeSpeeds(
             speeds,
-            isFlipped ? drive.getRotation().plus(new Rotation2d(Math.PI)) : drive.getRotation()));
+            isFlipped ? drive.getRotation().plus(new Rotation2d(Math.PI)) : drive.getRotation());
+
+    // Add sinusoidal lateral gyration while shoot trigger is held
+    if (autoAimGyrating) {
+      double ampM = Units.inchesToMeters(gyrationAmplitudeInches.get());
+      double freqHz = gyrationFreqHz.get();
+      robotRelative.vyMetersPerSecond +=
+          ampM
+              * 2.0
+              * Math.PI
+              * freqHz
+              * Math.cos(2.0 * Math.PI * freqHz * Timer.getFPGATimestamp());
+    }
+
+    drive.runVelocity(robotRelative);
   }
 
   private void runSnakeDrive() {
