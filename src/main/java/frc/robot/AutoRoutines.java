@@ -126,14 +126,16 @@ public class AutoRoutines {
   }
 
   /**
-   * Depot Single Pass - Shoot On Move variant. Crosses bump, collects balls on the single pass
-   * trajectory, then shoots while rolling toward the depot at 0.5 m/s. Deploys intake when ~2m from
-   * the depot to suck up additional balls while still firing. Runs until auto ends.
+   * Depot Single Pass - Shoot On Move variant. Crosses bump out, collects balls on the single pass
+   * trajectory, returns over the bump, then shoots while rolling toward the depot at 0.5 m/s from
+   * the alliance side. Deploys intake when ~2m from the depot to collect staged balls while still
+   * firing. Runs until auto ends.
    */
   public AutoRoutine depotSinglePassShootOnMove() {
     AutoRoutine routine = factory.newRoutine("Depot Single Pass Shoot On Move");
     AutoTrajectory bump = routine.trajectory("DepotBump");
     AutoTrajectory singlePass = routine.trajectory("DepotSinglePass");
+    AutoTrajectory bumpReturn = routine.trajectory("DepotBumpReturn");
 
     routine
         .active()
@@ -154,18 +156,18 @@ public class AutoRoutines {
                 // Run single pass trajectory with intake collecting balls
                 singlePass.cmd(),
 
-                // Retract intake while we shoot the collected balls en route to the depot
+                // Retract intake, spin up shooter, and return over the bump.
+                // The robot will be back on the alliance side near the hub after this.
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
-
-                // Spin up shooter
                 Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+                bumpReturn.cmd(),
 
                 // Brief initial aim to get shooter on-target before feeding
                 aimBackAtHub().withTimeout(0.75),
 
-                // Drive toward depot at 0.5 m/s, shooting on the move.
+                // Now on the alliance side: drive toward depot at 0.5 m/s while shooting.
                 // In parallel, deploy intake once within ~2m of the depot to collect the
-                // staged balls while still firing any remaining balls from the pass.
+                // 24 staged balls while still firing any remaining balls from the pass.
                 Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
                 Commands.parallel(
                     driveTowardDepotAimingAtHub(0.5),
