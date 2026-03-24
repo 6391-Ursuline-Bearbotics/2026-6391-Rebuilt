@@ -244,6 +244,8 @@ public class RobotContainer {
         "Outpost Single Pass (Shoot First)", autoRoutines::outpostSinglePassShootFirst);
     autoChooser.addRoutine(
         "Depot Single Pass (Shoot First)", autoRoutines::depotSinglePassShootFirst);
+    autoChooser.addRoutine(
+        "Depot Single Pass Shoot On Move", autoRoutines::depotSinglePassShootOnMove);
     autoChooser.addRoutine("Safe", autoRoutines::safe);
     autoChooser.addRoutine("Safe (Shoot First)", autoRoutines::safeShootFirst);
     autoChooser.addRoutine("Shoot Only", autoRoutines::shootOnly);
