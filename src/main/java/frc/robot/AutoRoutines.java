@@ -125,6 +125,67 @@ public class AutoRoutines {
         "Depot Single Pass Shoot First", "DepotBump", "DepotSinglePass", "DepotBumpReturn", true);
   }
 
+  /**
+   * Depot Single Pass - Shoot On Move variant. Crosses bump, collects balls on the single pass
+   * trajectory, then shoots while rolling toward the depot at 0.5 m/s. Deploys intake when ~2m from
+   * the depot to suck up additional balls while still firing. Runs until auto ends.
+   */
+  public AutoRoutine depotSinglePassShootOnMove() {
+    AutoRoutine routine = factory.newRoutine("Depot Single Pass Shoot On Move");
+    AutoTrajectory bump = routine.trajectory("DepotBump");
+    AutoTrajectory singlePass = routine.trajectory("DepotSinglePass");
+
+    routine
+        .active()
+        .onTrue(
+            Commands.sequence(
+                // Seed odometry from bump trajectory start
+                bump.resetOdometry(),
+
+                // Deploy intake before crossing bump
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
+
+                // Cross the bump via Choreo trajectory
+                bump.cmd(),
+
+                // PID to single pass trajectory start
+                sprintToPose(singlePass.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
+
+                // Run single pass trajectory with intake collecting balls
+                singlePass.cmd(),
+
+                // Retract intake while we shoot the collected balls en route to the depot
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
+
+                // Spin up shooter
+                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+
+                // Brief initial aim to get shooter on-target before feeding
+                aimBackAtHub().withTimeout(0.75),
+
+                // Drive toward depot at 0.5 m/s, shooting on the move.
+                // In parallel, deploy intake once within ~2m of the depot to collect the
+                // staged balls while still firing any remaining balls from the pass.
+                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                Commands.parallel(
+                    driveTowardDepotAimingAtHub(0.5),
+                    Commands.sequence(
+                        Commands.waitUntil(
+                            () -> {
+                              boolean isRed =
+                                  DriverStation.getAlliance().isPresent()
+                                      && DriverStation.getAlliance().get() == Alliance.Red;
+                              return drive
+                                      .getPose()
+                                      .getTranslation()
+                                      .getDistance(FieldConstants.getDepotCenter(isRed))
+                                  < 2.0;
+                            }),
+                        Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE))))));
+
+    return routine;
+  }
+
   public AutoRoutine safe() {
     return buildSafe("Safe", false);
   }
@@ -333,6 +394,47 @@ public class AutoRoutines {
             drive)
         .beforeStarting(() -> headingController.reset(drive.getRotation().getRadians()))
         .until(() -> drive.getPose().getTranslation().getDistance(target.getTranslation()) < 0.3);
+  }
+
+  /**
+   * Translate toward the depot-side fuel pool center at {@code speedMps} while the heading PID
+   * independently keeps the back of the robot aimed at the hub. Translation and rotation are
+   * decoupled, so shoot-on-move compensation in the shooter handles the moving shot correctly.
+   */
+  private Command driveTowardDepotAimingAtHub(double speedMps) {
+    ProfiledPIDController headingController =
+        new ProfiledPIDController(5.0, 0, 0.4, new TrapezoidProfile.Constraints(8.0, 20.0));
+    headingController.enableContinuousInput(-Math.PI, Math.PI);
+
+    return Commands.run(
+            () -> {
+              Pose2d current = drive.getPose();
+              boolean isRed =
+                  DriverStation.getAlliance().isPresent()
+                      && DriverStation.getAlliance().get() == Alliance.Red;
+
+              // Rotation: keep back of robot aimed at hub
+              Translation2d hubCenter = FieldConstants.getHubCenter(isRed);
+              Translation2d toHub = hubCenter.minus(current.getTranslation());
+              double angleToHub = Math.atan2(toHub.getY(), toHub.getX());
+              double targetHeading = angleToHub + Math.PI;
+              double omega =
+                  headingController.calculate(current.getRotation().getRadians(), targetHeading);
+
+              // Translation: drive toward depot
+              Translation2d depotTarget = FieldConstants.getDepotCenter(isRed);
+              Translation2d toDepot = depotTarget.minus(current.getTranslation());
+              double driveAngle = Math.atan2(toDepot.getY(), toDepot.getX());
+
+              drive.runVelocity(
+                  ChassisSpeeds.fromFieldRelativeSpeeds(
+                      Math.cos(driveAngle) * speedMps,
+                      Math.sin(driveAngle) * speedMps,
+                      omega,
+                      current.getRotation()));
+            },
+            drive)
+        .beforeStarting(() -> headingController.reset(drive.getRotation().getRadians()));
   }
 
   /** Rotate in place to aim back of robot at hub. */
