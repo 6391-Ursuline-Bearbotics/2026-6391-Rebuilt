@@ -366,12 +366,12 @@ public class Intake extends SubsystemBase {
   }
 
   /**
-   * Periodically triggers a rehome cycle every 2 seconds. Intended for use during auto shooting
+   * Periodically triggers a rehome cycle every 1.5 seconds. Intended for use during auto shooting
    * phases to keep the intake seated. Does not require the intake subsystem so it can run in
    * parallel with other intake goal commands.
    */
   public Command periodicAutoRehomeCommand() {
-    return Commands.sequence(Commands.waitSeconds(1.0), Commands.runOnce(() -> setGoal(Goal.IDLE)))
+    return Commands.sequence(Commands.waitSeconds(1.5), Commands.runOnce(() -> setGoal(Goal.IDLE)))
         .repeatedly()
         .withName("Intake Periodic Auto Rehome");
   }
