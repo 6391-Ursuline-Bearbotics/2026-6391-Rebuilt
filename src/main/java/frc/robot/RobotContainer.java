@@ -380,7 +380,8 @@ public class RobotContainer {
                 .finallyDo(() -> autoAimGyrating = false)
                 .alongWith(intake.periodicAutoRehomeCommand()));
 
-    // Left bumper: Gated auto shot with intake deployed + running (hold to shoot, release to retract)
+    // Left bumper: Gated auto shot with intake deployed + running (hold to shoot, release to
+    // retract)
     op.leftBumper()
         .whileTrue(
             Commands.sequence(
