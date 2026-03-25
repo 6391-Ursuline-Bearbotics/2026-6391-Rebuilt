@@ -17,6 +17,7 @@ import frc.robot.subsystems.drive.Drive;
 import frc.robot.subsystems.indexer.Indexer;
 import frc.robot.subsystems.intake.Intake;
 import frc.robot.subsystems.shooter.Shooter;
+import frc.robot.subsystems.shooter.ShooterConstants;
 import java.util.Optional;
 
 public class AutoRoutines {
@@ -426,7 +427,10 @@ public class AutoRoutines {
               Translation2d hubCenter = FieldConstants.getHubCenter(isRed);
               Translation2d toHub = hubCenter.minus(current.getTranslation());
               double angleToHub = Math.atan2(toHub.getY(), toHub.getX());
-              double targetHeading = angleToHub + Math.PI;
+              double targetHeading =
+                  angleToHub
+                      + Math.PI
+                      + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
               double omega =
                   headingController.calculate(current.getRotation().getRadians(), targetHeading);
 
@@ -462,7 +466,10 @@ public class AutoRoutines {
 
               Translation2d toHub = hubCenter.minus(current.getTranslation());
               double angleToHub = Math.atan2(toHub.getY(), toHub.getX());
-              double targetHeading = angleToHub + Math.PI;
+              double targetHeading =
+                  angleToHub
+                      + Math.PI
+                      + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
 
               double omega =
                   headingController.calculate(current.getRotation().getRadians(), targetHeading);
