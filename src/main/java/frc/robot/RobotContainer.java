@@ -657,7 +657,7 @@ public class RobotContainer {
     drive.runVelocity(robotRelative);
   }
 
-  private static final double kAimToleranceRad = Math.toRadians(6.5);
+  private static final double kAimToleranceRad = Math.toRadians(2.5);
 
   /**
    * Returns true when the robot's shooter is pointed within tolerance of the current aim target.
