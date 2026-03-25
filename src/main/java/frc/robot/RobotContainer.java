@@ -390,7 +390,6 @@ public class RobotContainer {
                           shooter.setGoal(Shooter.Goal.SHOOT);
                           currentDriveMode = DriveMode.AIM_TARGET;
                           aimTargetController.reset(drive.getRotation().getRadians());
-                          autoAimGyrating = true;
                           intake.setGoal(Intake.Goal.INTAKE);
                         }),
                     Commands.waitUntil(() -> shooter.isAtSetpoint() && isAimedAtTarget()),
