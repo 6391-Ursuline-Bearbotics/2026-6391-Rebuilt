@@ -190,7 +190,7 @@ public class AutoRoutines {
                                           .getDistance(FieldConstants.getDepotCenter(isRed))
                                       < 2.0;
                                 }),
-                        Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)))));
+                        Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE))))));
 
     return routine;
   }

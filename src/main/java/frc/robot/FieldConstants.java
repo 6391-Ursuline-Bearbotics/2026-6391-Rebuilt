@@ -113,7 +113,8 @@ public class FieldConstants {
     public static final Translation2d redCenter =
         new Translation2d(fieldLength - depth, fieldWidth / 2.0 - distanceFromCenterY);
     public static final Translation2d redApproachTarget =
-        new Translation2d(fieldLength - depth, fieldWidth / 2.0 - distanceFromCenterY + approachYOffset);
+        new Translation2d(
+            fieldLength - depth, fieldWidth / 2.0 - distanceFromCenterY + approachYOffset);
   }
 
   /** Get the hub center for the specified alliance. */
