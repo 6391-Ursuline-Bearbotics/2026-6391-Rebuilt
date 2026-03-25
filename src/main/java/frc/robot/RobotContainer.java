@@ -377,7 +377,7 @@ public class RobotContainer {
                     Commands.run(() -> indexer.setGoal(Indexer.Goal.FEED))
                         .finallyDo(() -> indexer.setGoal(Indexer.Goal.IDLE)))
                 .finallyDo(() -> autoAimGyrating = false)
-                .alongWith(intake.periodicAutoRehomeCommand()));
+                .alongWith(intake.shootingPressureCommand()));
 
     // Left bumper: Spin up shooter (toggle on)
     op.leftBumper().onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)));
@@ -411,7 +411,7 @@ public class RobotContainer {
                       currentDriveMode = DriveMode.STANDARD;
                       autoAimGyrating = false;
                     })
-                .alongWith(intake.periodicAutoRehomeCommand()));
+                .alongWith(intake.shootingPressureCommand()));
 
     // DPAD: Manual distance setpoint + spin up shooter
     // Left = 5ft, Right = 10ft, Up = +0.5ft, Down = -0.5ft
