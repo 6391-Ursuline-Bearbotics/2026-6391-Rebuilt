@@ -63,6 +63,7 @@ public final class ShooterConstants {
     map.put(3.3, 3200.0); // ~3 Distance to trench shot
     map.put(4.1, 3300.0);
     map.put(4.8, 3500.0); // ~5.5 Distance to corner of alliance zone shot
+    map.put(5.1, 3550.0); // ~5.5 Distance to corner of alliance zone shot
     map.put(6.0, 5500.0); // Long passing shots
     map.put(6.5, 6000.0); // Long passing shots
     return map;
