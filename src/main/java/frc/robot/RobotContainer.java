@@ -56,6 +56,7 @@ import frc.robot.subsystems.intake.IntakeRollerIO;
 import frc.robot.subsystems.intake.IntakeRollerIOSim;
 import frc.robot.subsystems.intake.IntakeRollerIOTalonFX;
 import frc.robot.subsystems.shooter.Shooter;
+import frc.robot.subsystems.shooter.ShooterConstants;
 import frc.robot.subsystems.shooter.ShooterHoodIO;
 import frc.robot.subsystems.shooter.ShooterHoodIOServo;
 import frc.robot.subsystems.shooter.ShooterHoodIOSim;
@@ -624,7 +625,10 @@ public class RobotContainer {
 
     // Calculate angle to target — add π so the back (shooter) faces the target
     Translation2d robotToTarget = target.minus(robotPosition);
-    double targetHeading = Math.atan2(robotToTarget.getY(), robotToTarget.getX()) + Math.PI;
+    double targetHeading =
+        Math.atan2(robotToTarget.getY(), robotToTarget.getX())
+            + Math.PI
+            + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
 
     double omega = aimTargetController.calculate(drive.getRotation().getRadians(), targetHeading);
 
@@ -670,7 +674,10 @@ public class RobotContainer {
       target = FieldConstants.getPassingTarget(robotPosition, isRedAlliance);
     }
     Translation2d robotToTarget = target.minus(robotPosition);
-    double targetHeading = Math.atan2(robotToTarget.getY(), robotToTarget.getX()) + Math.PI;
+    double targetHeading =
+        Math.atan2(robotToTarget.getY(), robotToTarget.getX())
+            + Math.PI
+            + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
     double error = MathUtil.angleModulus(targetHeading - drive.getRotation().getRadians());
     boolean aimed = Math.abs(error) < kAimToleranceRad;
     Logger.recordOutput("Shooter/AimErrorDeg", Math.toDegrees(error));
@@ -705,7 +712,10 @@ public class RobotContainer {
 
               Translation2d toHub = hubCenter.minus(current.getTranslation());
               double angleToHub = Math.atan2(toHub.getY(), toHub.getX());
-              double targetHeading = angleToHub + Math.PI;
+              double targetHeading =
+                  angleToHub
+                      + Math.PI
+                      + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
 
               double omega =
                   headingController.calculate(current.getRotation().getRadians(), targetHeading);

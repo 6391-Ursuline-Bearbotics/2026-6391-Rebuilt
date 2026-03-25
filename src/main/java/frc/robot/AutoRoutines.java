@@ -17,6 +17,7 @@ import frc.robot.subsystems.drive.Drive;
 import frc.robot.subsystems.indexer.Indexer;
 import frc.robot.subsystems.intake.Intake;
 import frc.robot.subsystems.shooter.Shooter;
+import frc.robot.subsystems.shooter.ShooterConstants;
 import java.util.Optional;
 
 public class AutoRoutines {
@@ -167,26 +168,29 @@ public class AutoRoutines {
 
                 // Now on the alliance side: drive toward depot at 0.5 m/s while shooting.
                 // Three branches run in parallel until auto ends:
-                //   1. Drive + heading: translate toward depot, back of robot aimed at hub
+                //   1. Drive + heading: translate toward depot approach target, back aimed at hub
                 //   2. Feed: wait for shooter setpoint, then own the indexer in FEED mode
-                //   3. Intake: deploy once within ~2m of the depot for staged balls
+                //   3. Intake: jostle balls (periodic rehome) until within ~2m of the depot,
+                //      then deploy to collect staged balls -- mutually exclusive with jostling
                 Commands.parallel(
                     driveTowardDepotAimingAtHub(0.5),
                     Commands.sequence(
                         Commands.waitUntil(() -> shooter.isAtSetpoint()), indexer.feedCommand()),
                     Commands.sequence(
-                        Commands.waitUntil(
-                            () -> {
-                              boolean isRed =
-                                  DriverStation.getAlliance().isPresent()
-                                      && DriverStation.getAlliance().get() == Alliance.Red;
-                              return drive
-                                      .getPose()
-                                      .getTranslation()
-                                      .getDistance(FieldConstants.getDepotCenter(isRed))
-                                  < 2.0;
-                            }),
-                        Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE))))));
+                        intake
+                            .periodicAutoRehomeCommand()
+                            .until(
+                                () -> {
+                                  boolean isRed =
+                                      DriverStation.getAlliance().isPresent()
+                                          && DriverStation.getAlliance().get() == Alliance.Red;
+                                  return drive
+                                          .getPose()
+                                          .getTranslation()
+                                          .getDistance(FieldConstants.getDepotCenter(isRed))
+                                      < 2.0;
+                                }),
+                        Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)))));
 
     return routine;
   }
@@ -422,12 +426,15 @@ public class AutoRoutines {
               Translation2d hubCenter = FieldConstants.getHubCenter(isRed);
               Translation2d toHub = hubCenter.minus(current.getTranslation());
               double angleToHub = Math.atan2(toHub.getY(), toHub.getX());
-              double targetHeading = angleToHub + Math.PI;
+              double targetHeading =
+                  angleToHub
+                      + Math.PI
+                      + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
               double omega =
                   headingController.calculate(current.getRotation().getRadians(), targetHeading);
 
               // Translation: drive toward depot
-              Translation2d depotTarget = FieldConstants.getDepotCenter(isRed);
+              Translation2d depotTarget = FieldConstants.getDepotApproachTarget(isRed);
               Translation2d toDepot = depotTarget.minus(current.getTranslation());
               double driveAngle = Math.atan2(toDepot.getY(), toDepot.getX());
 
@@ -458,7 +465,10 @@ public class AutoRoutines {
 
               Translation2d toHub = hubCenter.minus(current.getTranslation());
               double angleToHub = Math.atan2(toHub.getY(), toHub.getX());
-              double targetHeading = angleToHub + Math.PI;
+              double targetHeading =
+                  angleToHub
+                      + Math.PI
+                      + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
 
               double omega =
                   headingController.calculate(current.getRotation().getRadians(), targetHeading);

@@ -31,6 +31,13 @@ public final class ShooterConstants {
   // Shoot-on-the-move
   public static final int shotCompensationIterations = 3;
 
+  /**
+   * Physical heading offset of the shooter relative to the robot's back axis, in degrees. Positive
+   * values rotate the aim clockwise (when viewed from above). Tune this if shots consistently miss
+   * to one side.
+   */
+  public static final double shooterHeadingOffsetDegrees = 0.0;
+
   // Hood servos (PWM ports - placeholder, update when wired)
   public static final int hoodLeftServoPWM = 0;
   public static final int hoodRightServoPWM = 1;
