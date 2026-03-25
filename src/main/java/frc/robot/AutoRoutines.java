@@ -209,7 +209,7 @@ public class AutoRoutines {
                 Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
                 aimBackAtHub().withTimeout(1.5),
                 Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                intake.shootingPressureCommand().withTimeout(10.0),
+                intake.periodicAutoRehomeCommand().withTimeout(10.0),
                 Commands.runOnce(
                     () -> {
                       shooter.setGoal(Shooter.Goal.IDLE);
@@ -294,7 +294,7 @@ public class AutoRoutines {
                     Commands.sequence(
                         Commands.waitSeconds(1.0),
                         Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                        intake.shootingPressureCommand().withTimeout(10.0)),
+                        intake.periodicAutoRehomeCommand().withTimeout(10.0)),
                     aimBackAtHub()),
 
                 // Cleanup
@@ -355,7 +355,7 @@ public class AutoRoutines {
 
                 // Feed and shoot for remaining time
                 Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                intake.shootingPressureCommand().withTimeout(10.0),
+                intake.periodicAutoRehomeCommand().withTimeout(10.0),
 
                 // Cleanup
                 Commands.runOnce(

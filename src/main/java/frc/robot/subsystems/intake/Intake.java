@@ -90,7 +90,6 @@ public class Intake extends SubsystemBase {
   private DeployState deployState = DeployState.RETRACTED;
   private double deployedPositionRad = 0.0;
   private boolean rehomeRequested = false;
-  private boolean shootingPressureMode = false;
 
   // Deploy current spike detection
   private final Timer stallTimer = new Timer();
@@ -230,8 +229,7 @@ public class Intake extends SubsystemBase {
         if (goalWantsDeploy) {
           transitionTo(DeployState.DEPLOYING);
           deployIO.setVoltage(deployVoltage.get());
-        } else if (!shootingPressureMode
-            && stallTimer.hasElapsed(IntakeConstants.deployInrushIgnoreTime)
+        } else if (stallTimer.hasElapsed(IntakeConstants.deployInrushIgnoreTime)
             && deployInputs.statorCurrentAmps > retractStallCurrentThreshold.get()) {
           transitionTo(DeployState.RETRACTED);
           deployIO.stop();
@@ -340,21 +338,6 @@ public class Intake extends SubsystemBase {
     stallTimer.restart();
   }
 
-  @AutoLogOutput(key = "Intake/ShootingPressureMode")
-  public boolean isShootingPressureMode() {
-    return shootingPressureMode;
-  }
-
-  /**
-   * Enables or disables shooting pressure mode. When enabled, the deploy motor continues applying
-   * retraction voltage even after reaching the hard stop, keeping the intake pressed against the
-   * indexer for better ball compaction during shooting. The 60A hardware stator current limit on
-   * the TalonFX still applies, so the motor is effectively current-limited during the stall.
-   */
-  public void setShootingPressureMode(boolean enable) {
-    shootingPressureMode = enable;
-  }
-
   @AutoLogOutput(key = "Intake/Roller/Jammed")
   public boolean isRollerJammed() {
     return rollerJammed;
@@ -391,17 +374,6 @@ public class Intake extends SubsystemBase {
     return Commands.sequence(Commands.waitSeconds(1.5), Commands.runOnce(() -> setGoal(Goal.IDLE)))
         .repeatedly()
         .withName("Intake Periodic Auto Rehome");
-  }
-
-  /**
-   * Applies continuous retraction pressure while active, bypassing the normal stall-stop so the
-   * intake stays pressed against the indexer during shooting. The TalonFX 60A hardware stator
-   * current limit is still enforced. Does not require the intake subsystem.
-   */
-  public Command shootingPressureCommand() {
-    return Commands.startEnd(
-            () -> setShootingPressureMode(true), () -> setShootingPressureMode(false))
-        .withName("Intake Shooting Pressure");
   }
 
   public Command ejectCommand() {
