@@ -380,8 +380,28 @@ public class RobotContainer {
                 .finallyDo(() -> autoAimGyrating = false)
                 .alongWith(intake.periodicAutoRehomeCommand()));
 
-    // Left bumper: Spin up shooter (toggle on)
-    op.leftBumper().onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)));
+    // Left bumper: Gated auto shot with intake deployed + running (hold to shoot, release to
+    // retract)
+    op.leftBumper()
+        .whileTrue(
+            Commands.sequence(
+                    Commands.runOnce(
+                        () -> {
+                          shooter.setGoal(Shooter.Goal.SHOOT);
+                          currentDriveMode = DriveMode.AIM_TARGET;
+                          aimTargetController.reset(drive.getRotation().getRadians());
+                          autoAimGyrating = true;
+                          intake.setGoal(Intake.Goal.INTAKE);
+                        }),
+                    Commands.waitUntil(() -> shooter.isAtSetpoint() && isAimedAtTarget()),
+                    Commands.run(() -> indexer.setGoal(Indexer.Goal.FEED))
+                        .finallyDo(() -> indexer.setGoal(Indexer.Goal.IDLE)))
+                .finallyDo(
+                    () -> {
+                      currentDriveMode = DriveMode.STANDARD;
+                      autoAimGyrating = false;
+                      intake.setGoal(Intake.Goal.IDLE);
+                    }));
 
     // Right bumper: Stop shooter (toggle off) + return to standard drive mode
     op.rightBumper()
