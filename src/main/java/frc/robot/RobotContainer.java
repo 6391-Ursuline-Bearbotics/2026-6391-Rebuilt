@@ -475,7 +475,7 @@ public class RobotContainer {
                 .alongWith(indexer.ejectCommand()));
 
     // Rumble both controllers 2 seconds before our hub's active shift starts
-    new Trigger(() -> GameData.isHubActivatingSoon(2.0))
+    new Trigger(() -> GameData.isHubActivatingSoon(5.0))
         .whileTrue(
             Commands.startEnd(
                 () -> {
