@@ -373,7 +373,6 @@ public class RobotContainer {
                     Commands.runOnce(
                         () -> {
                           shooter.setGoal(Shooter.Goal.SHOOT);
-                          autoAimGyrating = true;
                         }),
                     Commands.run(() -> indexer.setGoal(Indexer.Goal.FEED))
                         .finallyDo(() -> indexer.setGoal(Indexer.Goal.IDLE)))
@@ -421,7 +420,6 @@ public class RobotContainer {
                           shooter.setGoal(Shooter.Goal.SHOOT);
                           currentDriveMode = DriveMode.AIM_TARGET;
                           aimTargetController.reset(drive.getRotation().getRadians());
-                          autoAimGyrating = true;
                         }),
                     Commands.waitUntil(() -> shooter.isAtSetpoint() && isAimedAtTarget()),
                     Commands.run(() -> indexer.setGoal(Indexer.Goal.FEED))

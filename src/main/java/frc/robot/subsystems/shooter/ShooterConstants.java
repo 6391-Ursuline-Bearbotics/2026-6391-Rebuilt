@@ -57,11 +57,11 @@ public final class ShooterConstants {
    */
   public static InterpolatingDoubleTreeMap createDistanceToRPMMap() {
     var map = new InterpolatingDoubleTreeMap();
-    map.put(1.3, 2800.0); // Distance to our closest shot
-    map.put(2.0, 2900.0); // 2 is auto starting point
-    map.put(2.6, 3000.0); //
-    map.put(3.3, 3200.0); // ~3 Distance to trench shot
-    map.put(4.1, 3300.0);
+    map.put(1.3, 2750.0); // Distance to our closest shot
+    map.put(2.0, 2850.0); // 2 is auto starting point
+    map.put(2.6, 2900.0); //
+    map.put(3.3, 3150.0); // ~3 Distance to trench shot
+    map.put(4.1, 3250.0);
     map.put(4.8, 3500.0); // ~5.5 Distance to corner of alliance zone shot
     map.put(5.1, 3550.0); // ~5.5 Distance to corner of alliance zone shot
     map.put(6.0, 5500.0); // Long passing shots
