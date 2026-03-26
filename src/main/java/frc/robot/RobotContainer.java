@@ -232,21 +232,21 @@ public class RobotContainer {
     SmartDashboard.putData("Auto Choices", autoChooser);
 
     // Competition auto routines (always available)
-    autoChooser.addRoutine("Outpost Double Pass", autoRoutines::outpostDoublePass);
     autoChooser.addRoutine("Depot Double Pass", autoRoutines::depotDoublePass);
     autoChooser.addRoutine(
-        "Outpost Double Pass (Shoot First)", autoRoutines::outpostDoublePassShootFirst);
-    autoChooser.addRoutine(
         "Depot Double Pass (Shoot First)", autoRoutines::depotDoublePassShootFirst);
-    autoChooser.addRoutine("Outpost FULL Pass", autoRoutines::outpostFullPass);
-    autoChooser.addRoutine("Outpost Single Pass", autoRoutines::outpostSinglePass);
     autoChooser.addRoutine("Depot Single Pass", autoRoutines::depotSinglePass);
-    autoChooser.addRoutine(
-        "Outpost Single Pass (Shoot First)", autoRoutines::outpostSinglePassShootFirst);
     autoChooser.addRoutine(
         "Depot Single Pass (Shoot First)", autoRoutines::depotSinglePassShootFirst);
     autoChooser.addRoutine(
         "Depot Single Pass Shoot On Move", autoRoutines::depotSinglePassShootOnMove);
+    autoChooser.addRoutine("Outpost Double Pass", autoRoutines::outpostDoublePass);
+    autoChooser.addRoutine(
+        "Outpost Double Pass (Shoot First)", autoRoutines::outpostDoublePassShootFirst);
+    autoChooser.addRoutine("Outpost FULL Pass", autoRoutines::outpostFullPass);
+    autoChooser.addRoutine("Outpost Single Pass", autoRoutines::outpostSinglePass);
+    autoChooser.addRoutine(
+        "Outpost Single Pass (Shoot First)", autoRoutines::outpostSinglePassShootFirst);
     autoChooser.addRoutine("Safe", autoRoutines::safe);
     autoChooser.addRoutine("Safe (Shoot First)", autoRoutines::safeShootFirst);
     autoChooser.addRoutine("Shoot Only", autoRoutines::shootOnly);
