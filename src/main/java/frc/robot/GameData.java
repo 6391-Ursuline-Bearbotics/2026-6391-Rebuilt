@@ -11,6 +11,7 @@ import java.util.Optional;
  */
 public class GameData {
   private static final double SPINUP_LEAD_TIME_SECONDS = 5.0;
+  private static final double FEED_LEAD_TIME_SECONDS = 2.0;
 
   // Cached parse of the game-specific message ('R'/'B' → true/false). Null means not yet received.
   private static Boolean cachedRedInactiveFirst = null;
@@ -88,8 +89,8 @@ public class GameData {
 
   /**
    * Returns true if the indexer is allowed to feed at the given position. Always allows feeding
-   * outside our alliance zone. Inside our zone, requires hub to be active. Only gates when game
-   * data is present.
+   * outside our alliance zone. Inside our zone, requires hub to be active or within the feed lead
+   * time of becoming active. Only gates when game data is present.
    */
   public static boolean canFeed(Translation2d robotPosition) {
     if (!DriverStation.isTeleopEnabled()) {
@@ -103,7 +104,9 @@ public class GameData {
     if (!FieldConstants.isInOwnAllianceZone(robotPosition, isRed)) {
       return true;
     }
-    return isHubActive();
+    double matchTime = DriverStation.getMatchTime();
+    return isHubActiveInTeleop(alliance.get(), matchTime)
+        || isHubActiveInTeleop(alliance.get(), matchTime - FEED_LEAD_TIME_SECONDS);
   }
 
   /**
