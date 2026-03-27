@@ -51,6 +51,12 @@ public class Intake extends SubsystemBase {
   private static final LoggedTunableNumber rehomeDeployTime =
       new LoggedTunableNumber("Intake/Deploy/RehomeDeployTime", 0.5);
 
+  // Position hold: resist light forces when deployed, yield to heavy forces
+  private static final LoggedTunableNumber positionHoldThresholdRad =
+      new LoggedTunableNumber("Intake/Deploy/PositionHoldThresholdRad", 0.08);
+  private static final LoggedTunableNumber positionHoldYieldCurrentAmps =
+      new LoggedTunableNumber("Intake/Deploy/PositionHoldYieldCurrentAmps", 15.0);
+
   // Tunable roller jam detection parameters
   private static final LoggedTunableNumber rollerJamCurrentThreshold =
       new LoggedTunableNumber(
@@ -221,7 +227,19 @@ public class Intake extends SubsystemBase {
           transitionTo(DeployState.RETRACTING);
           deployIO.setVoltage(retractVoltage.get());
         } else {
-          deployIO.stop();
+          // If the intake has been pushed back from its deployed position, apply correction
+          // voltage to push it back out. If the correction current spikes above the yield
+          // threshold, something hard is forcing it in — stop correcting and let it yield.
+          double pushBackRad = deployedPositionRad - deployInputs.positionRad;
+          if (pushBackRad > positionHoldThresholdRad.get()) {
+            if (deployInputs.statorCurrentAmps < positionHoldYieldCurrentAmps.get()) {
+              deployIO.setVoltage(deployVoltage.get());
+            } else {
+              deployIO.stop(); // Heavy force — yield rather than fight it
+            }
+          } else {
+            deployIO.stop();
+          }
         }
         break;
 
