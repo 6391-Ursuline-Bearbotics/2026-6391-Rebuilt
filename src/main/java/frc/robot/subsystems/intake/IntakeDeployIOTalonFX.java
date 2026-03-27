@@ -4,7 +4,6 @@ import static frc.robot.util.PhoenixUtil.*;
 
 import com.ctre.phoenix6.BaseStatusSignal;
 import com.ctre.phoenix6.StatusSignal;
-import com.ctre.phoenix6.configs.MotorOutputConfigs;
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
 import com.ctre.phoenix6.controls.VoltageOut;
 import com.ctre.phoenix6.hardware.ParentDevice;
@@ -22,6 +21,7 @@ import edu.wpi.first.units.measure.Voltage;
 public class IntakeDeployIOTalonFX implements IntakeDeployIO {
   private final TalonFX talon;
 
+  private final TalonFXConfiguration config = new TalonFXConfiguration();
   private final VoltageOut voltageRequest = new VoltageOut(0);
 
   private final StatusSignal<Angle> position;
@@ -36,7 +36,6 @@ public class IntakeDeployIOTalonFX implements IntakeDeployIO {
   public IntakeDeployIOTalonFX() {
     talon = new TalonFX(IntakeConstants.deployMotorId, IntakeConstants.canBus);
 
-    var config = new TalonFXConfiguration();
     config.MotorOutput.NeutralMode = NeutralModeValue.Brake;
     config.MotorOutput.Inverted =
         IntakeConstants.deployMotorInverted
@@ -87,12 +86,7 @@ public class IntakeDeployIOTalonFX implements IntakeDeployIO {
 
   @Override
   public void setBrakeMode(boolean enable) {
-    var config = new MotorOutputConfigs();
-    config.NeutralMode = enable ? NeutralModeValue.Brake : NeutralModeValue.Coast;
-    config.Inverted =
-        IntakeConstants.deployMotorInverted
-            ? InvertedValue.Clockwise_Positive
-            : InvertedValue.CounterClockwise_Positive;
-    talon.getConfigurator().apply(config, 0.25);
+    config.MotorOutput.NeutralMode = enable ? NeutralModeValue.Brake : NeutralModeValue.Coast;
+    talon.getConfigurator().apply(config.MotorOutput, 0.25);
   }
 }
