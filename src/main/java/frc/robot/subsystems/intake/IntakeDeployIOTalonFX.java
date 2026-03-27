@@ -22,6 +22,7 @@ import edu.wpi.first.units.measure.Voltage;
 public class IntakeDeployIOTalonFX implements IntakeDeployIO {
   private final TalonFX talon;
 
+  private final TalonFXConfiguration config = new TalonFXConfiguration();
   private final VoltageOut voltageRequest = new VoltageOut(0);
 
   private final StatusSignal<Angle> position;
@@ -36,7 +37,6 @@ public class IntakeDeployIOTalonFX implements IntakeDeployIO {
   public IntakeDeployIOTalonFX() {
     talon = new TalonFX(IntakeConstants.deployMotorId, IntakeConstants.canBus);
 
-    var config = new TalonFXConfiguration();
     config.MotorOutput.NeutralMode = NeutralModeValue.Brake;
     config.MotorOutput.Inverted =
         IntakeConstants.deployMotorInverted
@@ -87,6 +87,7 @@ public class IntakeDeployIOTalonFX implements IntakeDeployIO {
 
   @Override
   public void setBrakeMode(boolean enable) {
+<<<<<<< HEAD
     var config = new MotorOutputConfigs();
     config.NeutralMode = enable ? NeutralModeValue.Brake : NeutralModeValue.Coast;
     config.Inverted =
@@ -94,5 +95,9 @@ public class IntakeDeployIOTalonFX implements IntakeDeployIO {
             ? InvertedValue.Clockwise_Positive
             : InvertedValue.CounterClockwise_Positive;
     talon.getConfigurator().apply(config, 0.25);
+=======
+    config.MotorOutput.NeutralMode = enable ? NeutralModeValue.Brake : NeutralModeValue.Coast;
+    talon.getConfigurator().apply(config.MotorOutput, 0.25);
+>>>>>>> 7304b5c9d6b955f7df5b778534d909bb7c917779
   }
 }
