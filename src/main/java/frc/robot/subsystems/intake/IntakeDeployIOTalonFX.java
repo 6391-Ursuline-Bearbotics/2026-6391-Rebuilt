@@ -4,6 +4,7 @@ import static frc.robot.util.PhoenixUtil.*;
 
 import com.ctre.phoenix6.BaseStatusSignal;
 import com.ctre.phoenix6.StatusSignal;
+import com.ctre.phoenix6.configs.MotorOutputConfigs;
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
 import com.ctre.phoenix6.controls.VoltageOut;
 import com.ctre.phoenix6.hardware.ParentDevice;
@@ -86,8 +87,12 @@ public class IntakeDeployIOTalonFX implements IntakeDeployIO {
 
   @Override
   public void setBrakeMode(boolean enable) {
-    var config = new TalonFXConfiguration();
-    config.MotorOutput.NeutralMode = enable ? NeutralModeValue.Brake : NeutralModeValue.Coast;
+    var config = new MotorOutputConfigs();
+    config.NeutralMode = enable ? NeutralModeValue.Brake : NeutralModeValue.Coast;
+    config.Inverted =
+        IntakeConstants.deployMotorInverted
+            ? InvertedValue.Clockwise_Positive
+            : InvertedValue.CounterClockwise_Positive;
     talon.getConfigurator().apply(config, 0.25);
   }
 }
