@@ -53,9 +53,13 @@ public class Intake extends SubsystemBase {
 
   // Position hold: resist light forces when deployed, yield to heavy forces
   private static final LoggedTunableNumber positionHoldThresholdRad =
-      new LoggedTunableNumber("Intake/Deploy/PositionHoldThresholdRad", 0.05);
+      new LoggedTunableNumber("Intake/Deploy/PositionHoldThresholdRad", 0.15);
+  private static final LoggedTunableNumber positionHoldVoltage =
+      new LoggedTunableNumber("Intake/Deploy/PositionHoldVoltage", 2.8);
   private static final LoggedTunableNumber positionHoldYieldCurrentAmps =
-      new LoggedTunableNumber("Intake/Deploy/PositionHoldYieldCurrentAmps", 15.0);
+      new LoggedTunableNumber("Intake/Deploy/PositionHoldYieldCurrentAmps", 30.0);
+  private static final LoggedTunableNumber positionHoldTimeoutSecs =
+      new LoggedTunableNumber("Intake/Deploy/PositionHoldTimeoutSecs", 0.15);
 
   // Tunable roller jam detection parameters
   private static final LoggedTunableNumber rollerJamCurrentThreshold =
@@ -99,9 +103,14 @@ public class Intake extends SubsystemBase {
   // Latches true when pushed back past threshold; stays true until fully returned to deployed
   // position, preventing bang-bang oscillation.
   private boolean positionCorrectionActive = false;
+  // Set when correction times out; blocks re-arming until intake returns to setpoint.
+  private boolean positionCorrectionGaveUp = false;
 
   // Deploy current spike detection
   private final Timer stallTimer = new Timer();
+
+  // Position correction timeout
+  private final Timer positionCorrectionTimer = new Timer();
 
   // Roller jam detection
   private final Timer rollerJamTimer = new Timer();
@@ -228,21 +237,32 @@ public class Intake extends SubsystemBase {
       case DEPLOYED:
         if (!goalWantsDeploy) {
           positionCorrectionActive = false;
+          positionCorrectionGaveUp = false;
           transitionTo(DeployState.RETRACTING);
           deployIO.setVoltage(retractVoltage.get());
         } else {
           // Latch correction on once pushed back past threshold; only clear it once fully
           // returned to the deployed position. This prevents bang-bang oscillation.
           double pushBackRad = deployedPositionRad - deployInputs.positionRad;
-          if (pushBackRad > positionHoldThresholdRad.get()) {
-            positionCorrectionActive = true;
-          } else if (pushBackRad <= 0.0) {
+          if (pushBackRad <= 0.0) {
+            // Returned to setpoint — clear all correction state
             positionCorrectionActive = false;
+            positionCorrectionGaveUp = false;
+          } else if (pushBackRad > positionHoldThresholdRad.get()
+              && !positionCorrectionActive
+              && !positionCorrectionGaveUp) {
+            positionCorrectionActive = true;
+            positionCorrectionTimer.restart();
           }
 
           if (positionCorrectionActive) {
-            if (deployInputs.statorCurrentAmps < positionHoldYieldCurrentAmps.get()) {
-              deployIO.setVoltage(deployVoltage.get());
+            if (positionCorrectionTimer.hasElapsed(positionHoldTimeoutSecs.get())) {
+              // Timed out — give up and block re-arming until intake returns to setpoint
+              positionCorrectionActive = false;
+              positionCorrectionGaveUp = true;
+              deployIO.stop();
+            } else if (deployInputs.statorCurrentAmps < positionHoldYieldCurrentAmps.get()) {
+              deployIO.setVoltage(positionHoldVoltage.get());
             } else {
               // Heavy force — yield rather than fight it and reset latch
               positionCorrectionActive = false;
@@ -360,6 +380,8 @@ public class Intake extends SubsystemBase {
     if (newState == DeployState.DEPLOYED) {
       deployIO.setBrakeMode(false);
       deployedPositionRad = deployInputs.positionRad;
+      positionCorrectionActive = false;
+      positionCorrectionGaveUp = false;
     } else if (deployState == DeployState.DEPLOYED) {
       deployIO.setBrakeMode(true);
     }
