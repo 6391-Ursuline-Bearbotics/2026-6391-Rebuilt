@@ -53,7 +53,7 @@ public class Intake extends SubsystemBase {
 
   // Position hold: resist light forces when deployed, yield to heavy forces
   private static final LoggedTunableNumber positionHoldThresholdRad =
-      new LoggedTunableNumber("Intake/Deploy/PositionHoldThresholdRad", 0.08);
+      new LoggedTunableNumber("Intake/Deploy/PositionHoldThresholdRad", 0.05);
   private static final LoggedTunableNumber positionHoldYieldCurrentAmps =
       new LoggedTunableNumber("Intake/Deploy/PositionHoldYieldCurrentAmps", 15.0);
 
@@ -96,6 +96,9 @@ public class Intake extends SubsystemBase {
   private DeployState deployState = DeployState.RETRACTED;
   private double deployedPositionRad = 0.0;
   private boolean rehomeRequested = false;
+  // Latches true when pushed back past threshold; stays true until fully returned to deployed
+  // position, preventing bang-bang oscillation.
+  private boolean positionCorrectionActive = false;
 
   // Deploy current spike detection
   private final Timer stallTimer = new Timer();
@@ -224,18 +227,26 @@ public class Intake extends SubsystemBase {
 
       case DEPLOYED:
         if (!goalWantsDeploy) {
+          positionCorrectionActive = false;
           transitionTo(DeployState.RETRACTING);
           deployIO.setVoltage(retractVoltage.get());
         } else {
-          // If the intake has been pushed back from its deployed position, apply correction
-          // voltage to push it back out. If the correction current spikes above the yield
-          // threshold, something hard is forcing it in — stop correcting and let it yield.
+          // Latch correction on once pushed back past threshold; only clear it once fully
+          // returned to the deployed position. This prevents bang-bang oscillation.
           double pushBackRad = deployedPositionRad - deployInputs.positionRad;
           if (pushBackRad > positionHoldThresholdRad.get()) {
+            positionCorrectionActive = true;
+          } else if (pushBackRad <= 0.0) {
+            positionCorrectionActive = false;
+          }
+
+          if (positionCorrectionActive) {
             if (deployInputs.statorCurrentAmps < positionHoldYieldCurrentAmps.get()) {
               deployIO.setVoltage(deployVoltage.get());
             } else {
-              deployIO.stop(); // Heavy force — yield rather than fight it
+              // Heavy force — yield rather than fight it and reset latch
+              positionCorrectionActive = false;
+              deployIO.stop();
             }
           } else {
             deployIO.stop();
