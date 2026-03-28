@@ -650,7 +650,7 @@ public class RobotContainer {
     double omega = aimTargetController.calculate(drive.getRotation().getRadians(), targetHeading);
 
     // Limit translational speed while aiming to improve accuracy
-    double aimMaxSpeed = 1.0; // m/s
+    double aimMaxSpeed = 1.5; // m/s
     ChassisSpeeds speeds =
         new ChassisSpeeds(
             linearVelocity.getX() * aimMaxSpeed, linearVelocity.getY() * aimMaxSpeed, omega);
