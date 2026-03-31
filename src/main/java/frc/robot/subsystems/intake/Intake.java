@@ -47,7 +47,7 @@ public class Intake extends SubsystemBase {
       new LoggedTunableNumber(
           "Intake/Deploy/RetractStallCurrentThreshold", IntakeConstants.retractCurrentThreshold);
   private static final LoggedTunableNumber retractRollerShutoffFraction =
-      new LoggedTunableNumber("Intake/Deploy/RetractRollerShutoffFraction", 0.1);
+      new LoggedTunableNumber("Intake/Deploy/RetractRollerShutoffFraction", 0.9);
   private static final LoggedTunableNumber rehomeDeployTime =
       new LoggedTunableNumber("Intake/Deploy/RehomeDeployTime", 0.5);
 

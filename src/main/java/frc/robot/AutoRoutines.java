@@ -17,6 +17,7 @@ import frc.robot.subsystems.drive.Drive;
 import frc.robot.subsystems.indexer.Indexer;
 import frc.robot.subsystems.intake.Intake;
 import frc.robot.subsystems.shooter.Shooter;
+import frc.robot.subsystems.shooter.ShooterConstants;
 import java.util.Optional;
 
 public class AutoRoutines {
@@ -123,6 +124,75 @@ public class AutoRoutines {
   public AutoRoutine depotSinglePassShootFirst() {
     return buildDoublePass(
         "Depot Single Pass Shoot First", "DepotBump", "DepotSinglePass", "DepotBumpReturn", true);
+  }
+
+  /**
+   * Depot Single Pass - Shoot On Move variant. Crosses bump out, collects balls on the single pass
+   * trajectory, returns over the bump, then shoots while rolling toward the depot at 0.5 m/s from
+   * the alliance side. Deploys intake when ~2m from the depot to collect staged balls while still
+   * firing. Runs until auto ends.
+   */
+  public AutoRoutine depotSinglePassShootOnMove() {
+    AutoRoutine routine = factory.newRoutine("Depot Single Pass Shoot On Move");
+    AutoTrajectory bump = routine.trajectory("DepotBump");
+    AutoTrajectory singlePass = routine.trajectory("DepotSinglePass");
+    AutoTrajectory bumpReturn = routine.trajectory("DepotBumpReturn");
+
+    routine
+        .active()
+        .onTrue(
+            Commands.sequence(
+                // Seed odometry from bump trajectory start
+                bump.resetOdometry(),
+
+                // Deploy intake before crossing bump
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
+
+                // Cross the bump via Choreo trajectory
+                bump.cmd(),
+
+                // PID to single pass trajectory start
+                sprintToPose(singlePass.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
+
+                // Run single pass trajectory with intake collecting balls
+                singlePass.cmd(),
+
+                // Retract intake, spin up shooter, and return over the bump.
+                // The shooter has the full bump-return transit time to reach setpoint.
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
+                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+                bumpReturn.cmd(),
+
+                // Correct positional error introduced by bump crossing (same as Shoot First auto)
+                sprintToPose(bumpReturn.getFinalPose().orElse(new Pose2d())).withTimeout(2.0),
+
+                // Now on the alliance side: drive toward depot at 0.5 m/s while shooting.
+                // Three branches run in parallel until auto ends:
+                //   1. Drive + heading: translate toward depot approach target, back aimed at hub
+                //   2. Feed: wait for shooter setpoint, then own the indexer in FEED mode
+                //   3. Intake: jostle balls (periodic rehome) until within ~2m of the depot,
+                //      then deploy to collect staged balls -- mutually exclusive with jostling
+                Commands.parallel(
+                    driveTowardDepotAimingAtHub(0.5),
+                    Commands.sequence(
+                        Commands.waitUntil(() -> shooter.isAtSetpoint()), indexer.feedCommand()),
+                    Commands.sequence(
+                        intake
+                            .periodicAutoRehomeCommand()
+                            .until(
+                                () -> {
+                                  boolean isRed =
+                                      DriverStation.getAlliance().isPresent()
+                                          && DriverStation.getAlliance().get() == Alliance.Red;
+                                  return drive
+                                          .getPose()
+                                          .getTranslation()
+                                          .getDistance(FieldConstants.getDepotCenter(isRed))
+                                      < 2.0;
+                                }),
+                        Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE))))));
+
+    return routine;
   }
 
   public AutoRoutine safe() {
@@ -335,6 +405,50 @@ public class AutoRoutines {
         .until(() -> drive.getPose().getTranslation().getDistance(target.getTranslation()) < 0.3);
   }
 
+  /**
+   * Translate toward the depot-side fuel pool center at {@code speedMps} while the heading PID
+   * independently keeps the back of the robot aimed at the hub. Translation and rotation are
+   * decoupled, so shoot-on-move compensation in the shooter handles the moving shot correctly.
+   */
+  private Command driveTowardDepotAimingAtHub(double speedMps) {
+    ProfiledPIDController headingController =
+        new ProfiledPIDController(5.0, 0, 0.4, new TrapezoidProfile.Constraints(8.0, 20.0));
+    headingController.enableContinuousInput(-Math.PI, Math.PI);
+
+    return Commands.run(
+            () -> {
+              Pose2d current = drive.getPose();
+              boolean isRed =
+                  DriverStation.getAlliance().isPresent()
+                      && DriverStation.getAlliance().get() == Alliance.Red;
+
+              // Rotation: keep back of robot aimed at hub
+              Translation2d hubCenter = FieldConstants.getHubCenter(isRed);
+              Translation2d toHub = hubCenter.minus(current.getTranslation());
+              double angleToHub = Math.atan2(toHub.getY(), toHub.getX());
+              double targetHeading =
+                  angleToHub
+                      + Math.PI
+                      + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
+              double omega =
+                  headingController.calculate(current.getRotation().getRadians(), targetHeading);
+
+              // Translation: drive toward depot
+              Translation2d depotTarget = FieldConstants.getDepotApproachTarget(isRed);
+              Translation2d toDepot = depotTarget.minus(current.getTranslation());
+              double driveAngle = Math.atan2(toDepot.getY(), toDepot.getX());
+
+              drive.runVelocity(
+                  ChassisSpeeds.fromFieldRelativeSpeeds(
+                      Math.cos(driveAngle) * speedMps,
+                      Math.sin(driveAngle) * speedMps,
+                      omega,
+                      current.getRotation()));
+            },
+            drive)
+        .beforeStarting(() -> headingController.reset(drive.getRotation().getRadians()));
+  }
+
   /** Rotate in place to aim back of robot at hub. */
   private Command aimBackAtHub() {
     ProfiledPIDController headingController =
@@ -351,7 +465,10 @@ public class AutoRoutines {
 
               Translation2d toHub = hubCenter.minus(current.getTranslation());
               double angleToHub = Math.atan2(toHub.getY(), toHub.getX());
-              double targetHeading = angleToHub + Math.PI;
+              double targetHeading =
+                  angleToHub
+                      + Math.PI
+                      + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
 
               double omega =
                   headingController.calculate(current.getRotation().getRadians(), targetHeading);

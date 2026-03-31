@@ -91,8 +91,47 @@ public class FieldConstants {
     }
   }
 
-  /** Get the hub center for the specified alliance */
+  /**
+   * Depot — 42"x27" fuel storage structure against the alliance wall. Dimensions from 6328
+   * Mechanical Advantage FieldConstants.
+   */
+  public static class Depot {
+    public static final double width = Units.inchesToMeters(42.0);
+    public static final double depth = Units.inchesToMeters(27.0);
+    public static final double distanceFromCenterY = Units.inchesToMeters(75.93);
+
+    // Drive approach target is offset 10" toward field center in Y to avoid clipping the upper edge
+    private static final double approachYOffset = Units.inchesToMeters(10.0);
+
+    // Blue: upper corner against blue wall (low X, high Y)
+    public static final Translation2d blueCenter =
+        new Translation2d(depth, fieldWidth / 2.0 + distanceFromCenterY);
+    public static final Translation2d blueApproachTarget =
+        new Translation2d(depth, fieldWidth / 2.0 + distanceFromCenterY - approachYOffset);
+
+    // Red: mirrored 180° across field center (high X, low Y)
+    public static final Translation2d redCenter =
+        new Translation2d(fieldLength - depth, fieldWidth / 2.0 - distanceFromCenterY);
+    public static final Translation2d redApproachTarget =
+        new Translation2d(
+            fieldLength - depth, fieldWidth / 2.0 - distanceFromCenterY + approachYOffset);
+  }
+
+  /** Get the hub center for the specified alliance. */
   public static Translation2d getHubCenter(boolean isRedAlliance) {
     return isRedAlliance ? Hub.redCenter : Hub.blueCenter;
+  }
+
+  /** Get the true depot center for the specified alliance (use for distance checks). */
+  public static Translation2d getDepotCenter(boolean isRedAlliance) {
+    return isRedAlliance ? Depot.redCenter : Depot.blueCenter;
+  }
+
+  /**
+   * Get the depot drive approach target for the specified alliance. Offset 10" toward field center
+   * in Y to avoid clipping the upper edge of the depot.
+   */
+  public static Translation2d getDepotApproachTarget(boolean isRedAlliance) {
+    return isRedAlliance ? Depot.redApproachTarget : Depot.blueApproachTarget;
   }
 }

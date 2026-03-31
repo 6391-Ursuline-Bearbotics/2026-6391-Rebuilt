@@ -56,6 +56,7 @@ import frc.robot.subsystems.intake.IntakeRollerIO;
 import frc.robot.subsystems.intake.IntakeRollerIOSim;
 import frc.robot.subsystems.intake.IntakeRollerIOTalonFX;
 import frc.robot.subsystems.shooter.Shooter;
+import frc.robot.subsystems.shooter.ShooterConstants;
 import frc.robot.subsystems.shooter.ShooterHoodIO;
 import frc.robot.subsystems.shooter.ShooterHoodIOServo;
 import frc.robot.subsystems.shooter.ShooterHoodIOSim;
@@ -231,19 +232,21 @@ public class RobotContainer {
     SmartDashboard.putData("Auto Choices", autoChooser);
 
     // Competition auto routines (always available)
-    autoChooser.addRoutine("Outpost Double Pass", autoRoutines::outpostDoublePass);
     autoChooser.addRoutine("Depot Double Pass", autoRoutines::depotDoublePass);
     autoChooser.addRoutine(
-        "Outpost Double Pass (Shoot First)", autoRoutines::outpostDoublePassShootFirst);
-    autoChooser.addRoutine(
         "Depot Double Pass (Shoot First)", autoRoutines::depotDoublePassShootFirst);
-    autoChooser.addRoutine("Outpost FULL Pass", autoRoutines::outpostFullPass);
-    autoChooser.addRoutine("Outpost Single Pass", autoRoutines::outpostSinglePass);
     autoChooser.addRoutine("Depot Single Pass", autoRoutines::depotSinglePass);
     autoChooser.addRoutine(
-        "Outpost Single Pass (Shoot First)", autoRoutines::outpostSinglePassShootFirst);
-    autoChooser.addRoutine(
         "Depot Single Pass (Shoot First)", autoRoutines::depotSinglePassShootFirst);
+    autoChooser.addRoutine(
+        "Depot Single Pass Shoot On Move", autoRoutines::depotSinglePassShootOnMove);
+    autoChooser.addRoutine("Outpost Double Pass", autoRoutines::outpostDoublePass);
+    autoChooser.addRoutine(
+        "Outpost Double Pass (Shoot First)", autoRoutines::outpostDoublePassShootFirst);
+    autoChooser.addRoutine("Outpost FULL Pass", autoRoutines::outpostFullPass);
+    autoChooser.addRoutine("Outpost Single Pass", autoRoutines::outpostSinglePass);
+    autoChooser.addRoutine(
+        "Outpost Single Pass (Shoot First)", autoRoutines::outpostSinglePassShootFirst);
     autoChooser.addRoutine("Safe", autoRoutines::safe);
     autoChooser.addRoutine("Safe (Shoot First)", autoRoutines::safeShootFirst);
     autoChooser.addRoutine("Shoot Only", autoRoutines::shootOnly);
@@ -370,15 +373,33 @@ public class RobotContainer {
                     Commands.runOnce(
                         () -> {
                           shooter.setGoal(Shooter.Goal.SHOOT);
-                          autoAimGyrating = true;
                         }),
                     Commands.run(() -> indexer.setGoal(Indexer.Goal.FEED))
                         .finallyDo(() -> indexer.setGoal(Indexer.Goal.IDLE)))
                 .finallyDo(() -> autoAimGyrating = false)
                 .alongWith(intake.periodicAutoRehomeCommand()));
 
-    // Left bumper: Spin up shooter (toggle on)
-    op.leftBumper().onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)));
+    // Left bumper: Gated auto shot with intake deployed + running (hold to shoot, release to
+    // retract)
+    op.leftBumper()
+        .whileTrue(
+            Commands.sequence(
+                    Commands.runOnce(
+                        () -> {
+                          shooter.setGoal(Shooter.Goal.SHOOT);
+                          currentDriveMode = DriveMode.AIM_TARGET;
+                          aimTargetController.reset(drive.getRotation().getRadians());
+                          intake.setGoal(Intake.Goal.INTAKE);
+                        }),
+                    Commands.waitUntil(() -> shooter.isAtSetpoint() && isAimedAtTarget()),
+                    Commands.run(() -> indexer.setGoal(Indexer.Goal.FEED))
+                        .finallyDo(() -> indexer.setGoal(Indexer.Goal.IDLE)))
+                .finallyDo(
+                    () -> {
+                      currentDriveMode = DriveMode.STANDARD;
+                      autoAimGyrating = false;
+                      intake.setGoal(Intake.Goal.IDLE);
+                    }));
 
     // Right bumper: Stop shooter (toggle off) + return to standard drive mode
     op.rightBumper()
@@ -399,7 +420,6 @@ public class RobotContainer {
                           shooter.setGoal(Shooter.Goal.SHOOT);
                           currentDriveMode = DriveMode.AIM_TARGET;
                           aimTargetController.reset(drive.getRotation().getRadians());
-                          autoAimGyrating = true;
                         }),
                     Commands.waitUntil(() -> shooter.isAtSetpoint() && isAimedAtTarget()),
                     Commands.run(() -> indexer.setGoal(Indexer.Goal.FEED))
@@ -455,7 +475,7 @@ public class RobotContainer {
                 .alongWith(indexer.ejectCommand()));
 
     // Rumble both controllers 2 seconds before our hub's active shift starts
-    new Trigger(() -> GameData.isHubActivatingSoon(2.0))
+    new Trigger(() -> GameData.isHubActivatingSoon(5.0))
         .whileTrue(
             Commands.startEnd(
                 () -> {
@@ -551,10 +571,24 @@ public class RobotContainer {
     boolean isFlipped =
         DriverStation.getAlliance().isPresent()
             && DriverStation.getAlliance().get() == Alliance.Red;
-    drive.runVelocity(
+    ChassisSpeeds robotRelative =
         ChassisSpeeds.fromFieldRelativeSpeeds(
             speeds,
-            isFlipped ? drive.getRotation().plus(new Rotation2d(Math.PI)) : drive.getRotation()));
+            isFlipped ? drive.getRotation().plus(new Rotation2d(Math.PI)) : drive.getRotation());
+
+    // Add sinusoidal lateral gyration while shoot trigger is held
+    if (autoAimGyrating) {
+      double ampM = Units.inchesToMeters(gyrationAmplitudeInches.get());
+      double freqHz = gyrationFreqHz.get();
+      robotRelative.vyMetersPerSecond +=
+          ampM
+              * 2.0
+              * Math.PI
+              * freqHz
+              * Math.cos(2.0 * Math.PI * freqHz * Timer.getFPGATimestamp());
+    }
+
+    drive.runVelocity(robotRelative);
   }
 
   private void runSnakeDrive() {
@@ -608,12 +642,15 @@ public class RobotContainer {
 
     // Calculate angle to target — add π so the back (shooter) faces the target
     Translation2d robotToTarget = target.minus(robotPosition);
-    double targetHeading = Math.atan2(robotToTarget.getY(), robotToTarget.getX()) + Math.PI;
+    double targetHeading =
+        Math.atan2(robotToTarget.getY(), robotToTarget.getX())
+            + Math.PI
+            + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
 
     double omega = aimTargetController.calculate(drive.getRotation().getRadians(), targetHeading);
 
     // Limit translational speed while aiming to improve accuracy
-    double aimMaxSpeed = 1.0; // m/s
+    double aimMaxSpeed = 1.5; // m/s
     ChassisSpeeds speeds =
         new ChassisSpeeds(
             linearVelocity.getX() * aimMaxSpeed, linearVelocity.getY() * aimMaxSpeed, omega);
@@ -637,7 +674,7 @@ public class RobotContainer {
     drive.runVelocity(robotRelative);
   }
 
-  private static final double kAimToleranceRad = Math.toRadians(6.5);
+  private static final double kAimToleranceRad = Math.toRadians(4.5);
 
   /**
    * Returns true when the robot's shooter is pointed within tolerance of the current aim target.
@@ -654,7 +691,10 @@ public class RobotContainer {
       target = FieldConstants.getPassingTarget(robotPosition, isRedAlliance);
     }
     Translation2d robotToTarget = target.minus(robotPosition);
-    double targetHeading = Math.atan2(robotToTarget.getY(), robotToTarget.getX()) + Math.PI;
+    double targetHeading =
+        Math.atan2(robotToTarget.getY(), robotToTarget.getX())
+            + Math.PI
+            + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
     double error = MathUtil.angleModulus(targetHeading - drive.getRotation().getRadians());
     boolean aimed = Math.abs(error) < kAimToleranceRad;
     Logger.recordOutput("Shooter/AimErrorDeg", Math.toDegrees(error));
@@ -689,7 +729,10 @@ public class RobotContainer {
 
               Translation2d toHub = hubCenter.minus(current.getTranslation());
               double angleToHub = Math.atan2(toHub.getY(), toHub.getX());
-              double targetHeading = angleToHub + Math.PI;
+              double targetHeading =
+                  angleToHub
+                      + Math.PI
+                      + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
 
               double omega =
                   headingController.calculate(current.getRotation().getRadians(), targetHeading);

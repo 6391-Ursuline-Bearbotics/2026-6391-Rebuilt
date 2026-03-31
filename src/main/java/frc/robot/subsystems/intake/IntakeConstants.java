@@ -13,10 +13,10 @@ public final class IntakeConstants {
   public static final double deployGearRatio = 25.0;
   public static final boolean deployMotorInverted = false;
   public static final double deployVoltage = 2.8;
-  public static final double retractVoltage = -2.8;
+  public static final double retractVoltage = -2.5;
   public static final double deployCurrentThreshold = 30.0; // Stator amps indicating hard stop
   public static final double retractCurrentThreshold =
-      45.0; // Stator amps indicating retracted hard stop (20% more than deploy)
+      55.0; // Stator amps indicating retracted hard stop (20% more than deploy)
   public static final double deployInrushIgnoreTime = 0.15; // Seconds to ignore after motor starts
   public static final double deployStatorCurrentLimit = 60.0;
 
