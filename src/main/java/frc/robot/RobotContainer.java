@@ -81,7 +81,8 @@ public class RobotContainer {
   public enum DriveMode {
     STANDARD,
     SNAKE,
-    AIM_TARGET // Aims at Hub in alliance zone, passing target otherwise
+    AIM_TARGET, // Aims at Hub in alliance zone, passing target otherwise
+    TRENCH
   }
 
   // Subsystems
@@ -307,6 +308,9 @@ public class RobotContainer {
                 case AIM_TARGET:
                   runAimTargetDrive();
                   break;
+                case TRENCH:
+                  runTrenchDrive();
+                  break;
               }
             },
             drive));
@@ -347,6 +351,16 @@ public class RobotContainer {
                             new Pose2d(drive.getPose().getTranslation(), Rotation2d.kZero)),
                     drive)
                 .ignoringDisable(true));
+
+    // Driver left bumper: enter TRENCH drive mode (heading lock + axis constraint + speed limit)
+    drv.leftBumper()
+        .onTrue(
+            Commands.runOnce(
+                () -> {
+                  currentDriveMode = DriveMode.TRENCH;
+                  trenchHeadingController.reset(drive.getRotation().getRadians());
+                  shooter.setGoal(Shooter.Goal.IDLE); // Force hood down for trench clearance
+                }));
 
     // Operator intake controls
     op.a().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
@@ -550,11 +564,14 @@ public class RobotContainer {
       new ProfiledPIDController(5.0, 0.0, 0.4, new TrapezoidProfile.Constraints(6.0, 15.0));
   private final ProfiledPIDController aimTargetController =
       new ProfiledPIDController(5.0, 0.0, 0.4, new TrapezoidProfile.Constraints(8.0, 20.0));
+  private final ProfiledPIDController trenchHeadingController =
+      new ProfiledPIDController(5.0, 0.0, 0.4, new TrapezoidProfile.Constraints(8.0, 20.0));
   private double lastSnakeHeading = 0.0;
 
   {
     snakeAngleController.enableContinuousInput(-Math.PI, Math.PI);
     aimTargetController.enableContinuousInput(-Math.PI, Math.PI);
+    trenchHeadingController.enableContinuousInput(-Math.PI, Math.PI);
   }
 
   private void runStandardDrive() {
@@ -672,6 +689,45 @@ public class RobotContainer {
     }
 
     drive.runVelocity(robotRelative);
+  }
+
+  private void runTrenchDrive() {
+    Translation2d robotPos = drive.getPose().getTranslation();
+    boolean isRedAlliance =
+        DriverStation.getAlliance().isPresent()
+            && DriverStation.getAlliance().get() == Alliance.Red;
+
+    // Auto-detect nearest own-alliance trench
+    Translation2d nearestTrench = FieldConstants.getNearestTrenchCenter(robotPos, isRedAlliance);
+    boolean isTopTrench = nearestTrench.getY() > FieldConstants.fieldWidth / 2.0;
+
+    // Heading lock: face toward nearest wall (into the trench)
+    double targetHeading = isTopTrench ? Math.PI / 2.0 : -Math.PI / 2.0;
+    double omega =
+        trenchHeadingController.calculate(drive.getRotation().getRadians(), targetHeading);
+
+    // Get joystick input
+    Translation2d rawInput = getLinearVelocityFromJoysticks();
+
+    // Axis constraint: primary Y axis (into/out of trench), X dampened to 30%
+    double primaryAxis = rawInput.getY();
+    double secondaryAxis = rawInput.getX() * 0.3;
+
+    // Speed limit: 1.5 m/s for precision in narrow opening
+    double trenchMaxSpeed = 1.5;
+    ChassisSpeeds speeds =
+        new ChassisSpeeds(secondaryAxis * trenchMaxSpeed, primaryAxis * trenchMaxSpeed, omega);
+
+    boolean isFlipped =
+        DriverStation.getAlliance().isPresent()
+            && DriverStation.getAlliance().get() == Alliance.Red;
+    drive.runVelocity(
+        ChassisSpeeds.fromFieldRelativeSpeeds(
+            speeds,
+            isFlipped ? drive.getRotation().plus(new Rotation2d(Math.PI)) : drive.getRotation()));
+
+    Logger.recordOutput("Drive/TrenchMode/Active", true);
+    Logger.recordOutput("Drive/TrenchMode/TargetTrench", nearestTrench);
   }
 
   private static final double kAimToleranceRad = Math.toRadians(4.5);
