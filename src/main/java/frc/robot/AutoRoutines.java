@@ -224,6 +224,126 @@ public class AutoRoutines {
   }
 
   /**
+   * Trench Outpost Disrupt: Drives out to the trench via TrenchOutpostDisrupt, then returns to the
+   * starting spot while shooting (Y-direction first, then X), then runs TrenchOutpostExit for a
+   * second pass to a shooting position.
+   */
+  public AutoRoutine trenchOutpostDisrupt() {
+    AutoRoutine routine = factory.newRoutine("Trench Outpost Disrupt");
+    AutoTrajectory disruptTraj = routine.trajectory("TrenchOutpostDisrupt");
+    AutoTrajectory exitTraj = routine.trajectory("TrenchOutpostExit");
+
+    routine
+        .active()
+        .onTrue(
+            Commands.sequence(
+                // Seed odometry from disrupt trajectory start
+                disruptTraj.resetOdometry(),
+
+                // Go disrupt the trench (no intake)
+                disruptTraj.cmd(),
+
+                // Spin up shooter for return journey
+                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+
+                // Shoot while driving back to starting spot (Y-direction first, then X)
+                Commands.parallel(
+                        driveYThenXAimingAtHub(exitTraj.getInitialPose().orElse(new Pose2d())),
+                        Commands.sequence(
+                            Commands.waitUntil(() -> shooter.isAtSetpoint()),
+                            indexer.feedCommand()),
+                        intake.periodicAutoRehomeCommand())
+                    .withTimeout(5.0),
+
+                // Fine-tune to exact TrenchOutpostExit start
+                sprintToPose(exitTraj.getInitialPose().orElse(new Pose2d())).withTimeout(2.0),
+
+                // Run TrenchOutpostExit for second pass
+                exitTraj.cmd(),
+
+                // Aim at hub and feed for remaining time
+                Commands.deadline(
+                    Commands.sequence(
+                        Commands.waitSeconds(0.5),
+                        Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                        intake.periodicAutoRehomeCommand().withTimeout(8.0)),
+                    aimBackAtHub()),
+
+                // Cleanup
+                Commands.runOnce(
+                    () -> {
+                      shooter.setGoal(Shooter.Goal.IDLE);
+                      indexer.setGoal(Indexer.Goal.IDLE);
+                      intake.setGoal(Intake.Goal.IDLE);
+                    })));
+
+    return routine;
+  }
+
+  /**
+   * Trench Outpost Rush: Drives out to the trench via TrenchOutpostDisrupt, deploying intake after
+   * reaching the first waypoint to collect pieces. Returns to starting spot while shooting
+   * (Y-direction first, then X), then runs TrenchOutpostExit for a second pass.
+   */
+  public AutoRoutine trenchOutpostRush() {
+    AutoRoutine routine = factory.newRoutine("Trench Outpost Rush");
+    AutoTrajectory disruptTraj = routine.trajectory("TrenchOutpostDisrupt");
+    AutoTrajectory exitTraj = routine.trajectory("TrenchOutpostExit");
+
+    // Deploy intake when the robot reaches the first intermediate waypoint (~1.25s in)
+    disruptTraj
+        .atTime(1.25256)
+        .onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
+
+    routine
+        .active()
+        .onTrue(
+            Commands.sequence(
+                // Seed odometry from disrupt trajectory start
+                disruptTraj.resetOdometry(),
+
+                // Rush into trench; intake deploys via event trigger at first waypoint
+                disruptTraj.cmd(),
+
+                // Retract intake, spin up shooter for return
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
+                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+
+                // Shoot while driving back to starting spot (Y-direction first, then X)
+                Commands.parallel(
+                        driveYThenXAimingAtHub(exitTraj.getInitialPose().orElse(new Pose2d())),
+                        Commands.sequence(
+                            Commands.waitUntil(() -> shooter.isAtSetpoint()),
+                            indexer.feedCommand()),
+                        intake.periodicAutoRehomeCommand())
+                    .withTimeout(5.0),
+
+                // Fine-tune to exact TrenchOutpostExit start
+                sprintToPose(exitTraj.getInitialPose().orElse(new Pose2d())).withTimeout(2.0),
+
+                // Run TrenchOutpostExit for second pass
+                exitTraj.cmd(),
+
+                // Aim at hub and feed for remaining time
+                Commands.deadline(
+                    Commands.sequence(
+                        Commands.waitSeconds(0.5),
+                        Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                        intake.periodicAutoRehomeCommand().withTimeout(8.0)),
+                    aimBackAtHub()),
+
+                // Cleanup
+                Commands.runOnce(
+                    () -> {
+                      shooter.setGoal(Shooter.Goal.IDLE);
+                      indexer.setGoal(Indexer.Goal.IDLE);
+                      intake.setGoal(Intake.Goal.IDLE);
+                    })));
+
+    return routine;
+  }
+
+  /**
    * Builds a double pass auto routine. Crosses bump, intakes across the field via trajectory,
    * returns over bump, aims at hub, and feeds for remaining time. If shootFirst is true, shoots the
    * preloaded ball before crossing the bump.
@@ -447,6 +567,63 @@ public class AutoRoutines {
             },
             drive)
         .beforeStarting(() -> headingController.reset(drive.getRotation().getRadians()));
+  }
+
+  /**
+   * Drive to {@code target} in two phases while aiming the back of the robot at the hub: first
+   * travel in the Y direction until within 0.3m of the target Y, then travel in the X direction
+   * until within 0.3m of the target overall. Decelerates proportionally as in sprintToPose.
+   */
+  private Command driveYThenXAimingAtHub(Pose2d target) {
+    ProfiledPIDController headingController =
+        new ProfiledPIDController(5.0, 0, 0.4, new TrapezoidProfile.Constraints(8.0, 20.0));
+    headingController.enableContinuousInput(-Math.PI, Math.PI);
+
+    return Commands.run(
+            () -> {
+              Pose2d current = drive.getPose();
+              boolean isRed =
+                  DriverStation.getAlliance().isPresent()
+                      && DriverStation.getAlliance().get() == Alliance.Red;
+
+              // Heading: keep back of robot aimed at hub
+              Translation2d hubCenter = FieldConstants.getHubCenter(isRed);
+              Translation2d toHub = hubCenter.minus(current.getTranslation());
+              double angleToHub = Math.atan2(toHub.getY(), toHub.getX());
+              double targetHeading =
+                  angleToHub
+                      + Math.PI
+                      + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
+              double omega =
+                  headingController.calculate(current.getRotation().getRadians(), targetHeading);
+
+              // Translation: Y-first then X
+              double yError = target.getY() - current.getY();
+              double xError = target.getX() - current.getX();
+
+              double vx, vy;
+              if (Math.abs(yError) > 0.3) {
+                // Phase 1: drive in Y direction
+                double speed =
+                    Math.min(
+                        drive.getMaxLinearSpeedMetersPerSec(), Math.max(0.5, Math.abs(yError) * 3.0));
+                vy = Math.signum(yError) * speed;
+                vx = 0;
+              } else {
+                // Phase 2: drive in X direction
+                double speed =
+                    Math.min(
+                        drive.getMaxLinearSpeedMetersPerSec(), Math.max(0.5, Math.abs(xError) * 3.0));
+                vx = Math.signum(xError) * speed;
+                vy = 0;
+              }
+
+              drive.runVelocity(
+                  ChassisSpeeds.fromFieldRelativeSpeeds(vx, vy, omega, current.getRotation()));
+            },
+            drive)
+        .beforeStarting(() -> headingController.reset(drive.getRotation().getRadians()))
+        .until(() -> drive.getPose().getTranslation().getDistance(target.getTranslation()) < 0.3);
   }
 
   /** Rotate in place to aim back of robot at hub. */

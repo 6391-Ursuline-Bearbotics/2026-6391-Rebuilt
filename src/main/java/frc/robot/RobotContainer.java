@@ -247,6 +247,8 @@ public class RobotContainer {
     autoChooser.addRoutine("Outpost Single Pass", autoRoutines::outpostSinglePass);
     autoChooser.addRoutine(
         "Outpost Single Pass (Shoot First)", autoRoutines::outpostSinglePassShootFirst);
+    autoChooser.addRoutine("Trench Outpost Disrupt", autoRoutines::trenchOutpostDisrupt);
+    autoChooser.addRoutine("Trench Outpost Rush", autoRoutines::trenchOutpostRush);
     autoChooser.addRoutine("Safe", autoRoutines::safe);
     autoChooser.addRoutine("Safe (Shoot First)", autoRoutines::safeShootFirst);
     autoChooser.addRoutine("Shoot Only", autoRoutines::shootOnly);
