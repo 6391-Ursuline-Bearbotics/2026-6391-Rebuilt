@@ -16,6 +16,7 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants;
 import frc.robot.Constants.Mode;
 import frc.robot.FieldConstants;
+import frc.robot.FieldConstants.Trench;
 import frc.robot.GameData;
 import frc.robot.util.LoggedTunableNumber;
 import java.text.DecimalFormat;
@@ -67,6 +68,17 @@ public class Shooter extends SubsystemBase {
       new LoggedTunableNumber("Shooter/JamCurrentThreshold", ShooterConstants.jamCurrentThreshold);
   private static final LoggedTunableNumber jamDebounceTime =
       new LoggedTunableNumber("Shooter/JamDebounceTime", ShooterConstants.jamDebounceTime);
+
+  // Tunable trench approach parameters
+  private static final LoggedTunableNumber trenchApproachDistance =
+      new LoggedTunableNumber(
+          "Shooter/TrenchApproachDistance", ShooterConstants.trenchApproachDistanceMeters);
+  private static final LoggedTunableNumber trenchApproachMinVelocity =
+      new LoggedTunableNumber(
+          "Shooter/TrenchApproachMinVelocity", ShooterConstants.trenchApproachMinVelocityMps);
+  private static final LoggedTunableNumber trenchApproachXMargin =
+      new LoggedTunableNumber(
+          "Shooter/TrenchApproachXMargin", ShooterConstants.trenchApproachXMarginMeters);
 
   public enum Goal {
     IDLE,
@@ -308,6 +320,12 @@ public class Shooter extends SubsystemBase {
     if (hoodAngleOverride.get() != 0.0) {
       commandedAngleDeg = hoodAngleOverride.get();
     }
+
+    // Trench approach override — mechanical safety takes priority over all other hood commands
+    if (isApproachingTrench()) {
+      commandedAngleDeg = ShooterConstants.hoodMinAngleDeg;
+    }
+
     hoodIO.setAngle(commandedAngleDeg);
 
     // Log the aim target and hub status for visualization
@@ -392,6 +410,61 @@ public class Shooter extends SubsystemBase {
               realTarget.getY() - fieldSpeeds.vyMetersPerSecond * tof);
     }
     return virtualTarget;
+  }
+
+  /**
+   * Returns true when the robot is moving toward a trench and close enough that the hood must be
+   * lowered proactively to ensure clearance.
+   */
+  @AutoLogOutput(key = "Shooter/TrenchApproachActive")
+  private boolean isApproachingTrench() {
+    Translation2d robotPos = poseSupplier.get().getTranslation();
+    ChassisSpeeds fieldSpeeds = fieldSpeedsSupplier.get();
+    double approachDist = trenchApproachDistance.get();
+    double minVel = trenchApproachMinVelocity.get();
+    double xMargin = trenchApproachXMargin.get();
+    double halfOpening = Trench.openingWidth / 2.0 + xMargin;
+
+    // Check all 4 trenches
+    Translation2d[] trenchCenters = {
+      Trench.blueTopCenter, Trench.blueBottomCenter, Trench.redTopCenter, Trench.redBottomCenter
+    };
+    double[] entryYs = {
+      Trench.topTrenchEntryY,
+      Trench.bottomTrenchEntryY,
+      Trench.topTrenchEntryY,
+      Trench.bottomTrenchEntryY
+    };
+    // Direction toward wall: +Y for top trenches, -Y for bottom trenches
+    double[] wallDirections = {1.0, -1.0, 1.0, -1.0};
+
+    for (int i = 0; i < trenchCenters.length; i++) {
+      // Check X bounds: robot must be within opening width + margin of trench center
+      if (Math.abs(robotPos.getX() - trenchCenters[i].getX()) > halfOpening) {
+        continue;
+      }
+
+      // Check Y distance to trench entry
+      double distToEntry = Math.abs(robotPos.getY() - entryYs[i]);
+      if (distToEntry > approachDist) {
+        continue;
+      }
+
+      // Check velocity toward the trench wall (dot product with wall direction)
+      double velocityTowardTrench = fieldSpeeds.vyMetersPerSecond * wallDirections[i];
+      if (velocityTowardTrench > minVel) {
+        return true;
+      }
+
+      // Also trigger if already inside the trench (past the entry Y toward the wall)
+      boolean insideTrench =
+          (wallDirections[i] > 0 && robotPos.getY() > entryYs[i])
+              || (wallDirections[i] < 0 && robotPos.getY() < entryYs[i]);
+      if (insideTrench) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @AutoLogOutput(key = "Shooter/Jammed")
