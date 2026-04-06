@@ -250,6 +250,10 @@ public class RobotContainer {
     autoChooser.addRoutine("Safe", autoRoutines::safe);
     autoChooser.addRoutine("Safe (Shoot First)", autoRoutines::safeShootFirst);
     autoChooser.addRoutine("Shoot Only", autoRoutines::shootOnly);
+    autoChooser.addRoutine("Trench 2-Cycle Outpost", autoRoutines::trenchTwoCycleOutpost);
+    autoChooser.addRoutine("Trench 2-Cycle Depot", autoRoutines::trenchTwoCycleDepot);
+    autoChooser.addRoutine("Trench Rush Outpost", autoRoutines::trenchRushOutpost);
+    autoChooser.addRoutine("Trench Rush Depot", autoRoutines::trenchRushDepot);
 
     // Test and characterization routines (tuning mode only)
     if (Constants.tuningMode) {

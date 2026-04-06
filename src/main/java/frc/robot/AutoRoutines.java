@@ -224,6 +224,70 @@ public class AutoRoutines {
   }
 
   /**
+   * Trench 2-Cycle from the outpost-side trench. Exits trench, crosses bump collecting balls,
+   * shoots on move heading back, then makes a second cycle. Hood starts down (in trench).
+   *
+   * <p>Choreo trajectories required:
+   *
+   * <ul>
+   *   <li>TrenchOutpostExit — start inside outpost-side trench (robot centered, heading facing
+   *       field), exit to center line with far bumper edge on the line
+   *   <li>TrenchOutpostCycle — from center line, cross bump, collect balls, shoot on move heading
+   *       back, make second collection pass, return over bump to shooting position
+   * </ul>
+   */
+  public AutoRoutine trenchTwoCycleOutpost() {
+    return buildTrenchTwoCycle("Trench 2-Cycle Outpost", "TrenchOutpostExit", "TrenchOutpostCycle");
+  }
+
+  /**
+   * Trench 2-Cycle from the depot-side trench. Same strategy as outpost variant.
+   *
+   * <p>Choreo trajectories required:
+   *
+   * <ul>
+   *   <li>TrenchDepotExit — start inside depot-side trench, exit to center line
+   *   <li>TrenchDepotCycle — from center line, cross bump, collect, shoot on move, second cycle
+   * </ul>
+   */
+  public AutoRoutine trenchTwoCycleDepot() {
+    return buildTrenchTwoCycle("Trench 2-Cycle Depot", "TrenchDepotExit", "TrenchDepotCycle");
+  }
+
+  /**
+   * Trench Rush from the outpost-side trench. Rushes to opponent ball area near center line to
+   * disrupt, then deploys intake, collects heading to center, crosses bump, shoots, and continues
+   * collecting.
+   *
+   * <p>Choreo trajectories required:
+   *
+   * <ul>
+   *   <li>TrenchOutpostRush — start inside outpost-side trench, full speed rush to opponent ball
+   *       area (almost full robot width over center line but bumpers still on our side). NO intake
+   *       deployed — ramming mode.
+   *   <li>TrenchOutpostRushCollect — from rush endpoint, collect balls heading toward center, cross
+   *       bump, end at shooting position in alliance zone
+   * </ul>
+   */
+  public AutoRoutine trenchRushOutpost() {
+    return buildTrenchRush("Trench Rush Outpost", "TrenchOutpostRush", "TrenchOutpostRushCollect");
+  }
+
+  /**
+   * Trench Rush from the depot-side trench. Same strategy as outpost variant.
+   *
+   * <p>Choreo trajectories required:
+   *
+   * <ul>
+   *   <li>TrenchDepotRush — start inside depot-side trench, rush to opponent ball area
+   *   <li>TrenchDepotRushCollect — collect and return over bump to shooting position
+   * </ul>
+   */
+  public AutoRoutine trenchRushDepot() {
+    return buildTrenchRush("Trench Rush Depot", "TrenchDepotRush", "TrenchDepotRushCollect");
+  }
+
+  /**
    * Builds a double pass auto routine. Crosses bump, intakes across the field via trajectory,
    * returns over bump, aims at hub, and feeds for remaining time. If shootFirst is true, shoots the
    * preloaded ball before crossing the bump.
@@ -372,6 +436,118 @@ public class AutoRoutines {
     return routine;
   }
 
+  /**
+   * Builds a trench 2-cycle auto. Exits trench with intake deployed, crosses bump to collect, then
+   * shoots on the move heading back. Makes a second cycle for maximum ball collection.
+   */
+  private AutoRoutine buildTrenchTwoCycle(String name, String exitTrajName, String cycleTrajName) {
+    AutoRoutine routine = factory.newRoutine(name);
+    AutoTrajectory exit = routine.trajectory(exitTrajName);
+    AutoTrajectory cycle = routine.trajectory(cycleTrajName);
+
+    routine
+        .active()
+        .onTrue(
+            Commands.sequence(
+                // Seed odometry from trench starting position
+                exit.resetOdometry(),
+
+                // Deploy intake as we exit the trench
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
+
+                // Exit trench to center line (bumpers on line)
+                exit.cmd(),
+
+                // Spin up shooter during bump crossing transit
+                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+
+                // Run the cycle trajectory (cross bump, collect, shoot on move, second pass)
+                cycle.cmd(),
+
+                // Sprint to final shooting position
+                sprintToPose(cycle.getFinalPose().orElse(new Pose2d())).withTimeout(2.0),
+
+                // Aim at hub and shoot remaining balls
+                Commands.deadline(
+                    Commands.sequence(
+                        Commands.waitUntil(() -> shooter.isAtSetpoint()),
+                        Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                        intake.periodicAutoRehomeCommand().withTimeout(8.0)),
+                    aimBackAtHub()),
+
+                // Cleanup
+                Commands.runOnce(
+                    () -> {
+                      shooter.setGoal(Shooter.Goal.IDLE);
+                      indexer.setGoal(Indexer.Goal.IDLE);
+                      intake.setGoal(Intake.Goal.IDLE);
+                    })));
+
+    return routine;
+  }
+
+  /**
+   * Builds a trench rush auto. Rushes from trench to opponent ball area without intake (ramming),
+   * then deploys intake to collect, crosses bump, shoots, and continues collecting at center until
+   * auto ends.
+   */
+  private AutoRoutine buildTrenchRush(String name, String rushTrajName, String collectTrajName) {
+    AutoRoutine routine = factory.newRoutine(name);
+    AutoTrajectory rush = routine.trajectory(rushTrajName);
+    AutoTrajectory collect = routine.trajectory(collectTrajName);
+
+    routine
+        .active()
+        .onTrue(
+            Commands.sequence(
+                // Seed odometry from trench starting position
+                rush.resetOdometry(),
+
+                // NO intake deploy — ramming mode
+                // Rush to opponent ball area near center line
+                rush.cmd(),
+
+                // Ramming complete — deploy intake to collect scattered balls
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
+
+                // Spin up shooter during return transit
+                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+
+                // Collect heading toward center, cross bump, end at shooting position
+                collect.cmd(),
+
+                // Retract intake before shooting
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
+
+                // Sprint to final shooting position after bump crossing
+                sprintToPose(collect.getFinalPose().orElse(new Pose2d())).withTimeout(2.0),
+
+                // Aim and shoot all collected balls
+                Commands.deadline(
+                    Commands.sequence(
+                        Commands.waitUntil(() -> shooter.isAtSetpoint()),
+                        Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                        Commands.waitSeconds(3.0)),
+                    aimBackAtHub()),
+
+                // After shooting, go back out to collect more until auto ends
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
+                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.IDLE)),
+
+                // Drive toward center field collecting balls for remaining time
+                driveTowardCenterCollecting(),
+
+                // Cleanup
+                Commands.runOnce(
+                    () -> {
+                      shooter.setGoal(Shooter.Goal.IDLE);
+                      indexer.setGoal(Indexer.Goal.IDLE);
+                      intake.setGoal(Intake.Goal.IDLE);
+                    })));
+
+    return routine;
+  }
+
   /** Sprint to a target pose at high speed with heading control. */
   private Command sprintToPose(Pose2d target) {
     ProfiledPIDController headingController =
@@ -438,6 +614,52 @@ public class AutoRoutines {
               Translation2d toDepot = depotTarget.minus(current.getTranslation());
               double driveAngle = Math.atan2(toDepot.getY(), toDepot.getX());
 
+              drive.runVelocity(
+                  ChassisSpeeds.fromFieldRelativeSpeeds(
+                      Math.cos(driveAngle) * speedMps,
+                      Math.sin(driveAngle) * speedMps,
+                      omega,
+                      current.getRotation()));
+            },
+            drive)
+        .beforeStarting(() -> headingController.reset(drive.getRotation().getRadians()));
+  }
+
+  /**
+   * Drive toward field center while collecting balls with intake deployed. Maintains shooter aim at
+   * hub in case there's time for another shot.
+   */
+  private Command driveTowardCenterCollecting() {
+    ProfiledPIDController headingController =
+        new ProfiledPIDController(5.0, 0, 0.4, new TrapezoidProfile.Constraints(8.0, 20.0));
+    headingController.enableContinuousInput(-Math.PI, Math.PI);
+
+    return Commands.run(
+            () -> {
+              Pose2d current = drive.getPose();
+              boolean isRed =
+                  DriverStation.getAlliance().isPresent()
+                      && DriverStation.getAlliance().get() == Alliance.Red;
+
+              // Rotation: keep back of robot aimed at hub
+              Translation2d hubCenter = FieldConstants.getHubCenter(isRed);
+              Translation2d toHub = hubCenter.minus(current.getTranslation());
+              double angleToHub = Math.atan2(toHub.getY(), toHub.getX());
+              double targetHeading =
+                  angleToHub
+                      + Math.PI
+                      + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
+              double omega =
+                  headingController.calculate(current.getRotation().getRadians(), targetHeading);
+
+              // Translation: drive toward field center
+              Translation2d centerTarget =
+                  new Translation2d(
+                      FieldConstants.fieldLength / 2.0, FieldConstants.fieldWidth / 2.0);
+              Translation2d toCenter = centerTarget.minus(current.getTranslation());
+              double driveAngle = Math.atan2(toCenter.getY(), toCenter.getX());
+
+              double speedMps = 2.0;
               drive.runVelocity(
                   ChassisSpeeds.fromFieldRelativeSpeeds(
                       Math.cos(driveAngle) * speedMps,
