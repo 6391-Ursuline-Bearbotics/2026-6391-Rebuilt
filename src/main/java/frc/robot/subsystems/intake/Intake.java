@@ -217,6 +217,8 @@ public class Intake extends SubsystemBase {
           rehomeRequested = false;
           transitionTo(DeployState.REHOME_DEPLOYING);
           deployIO.setVoltage(deployVoltage.get());
+        } else if (shootingPressureMode) {
+          deployIO.setVoltage(retractVoltage.get());
         } else {
           deployIO.stop();
         }
