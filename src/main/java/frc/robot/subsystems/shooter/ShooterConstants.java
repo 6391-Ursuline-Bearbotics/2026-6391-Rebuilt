@@ -48,6 +48,11 @@ public final class ShooterConstants {
   public static final double jamCurrentThreshold = 60.0; // Stator amps
   public static final double jamDebounceTime = 1.0; // Seconds
 
+  // Trench approach — hood must be lowered before entering a trench
+  public static final double trenchApproachDistanceMeters = 2.0;
+  public static final double trenchApproachMinVelocityMps = 0.3;
+  public static final double trenchApproachXMarginMeters = 0.5;
+
   // Simulation
   public static final double simMOI = 0.001;
 

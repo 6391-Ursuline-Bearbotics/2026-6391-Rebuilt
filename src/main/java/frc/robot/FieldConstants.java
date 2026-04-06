@@ -117,6 +117,31 @@ public class FieldConstants {
             fieldLength - depth, fieldWidth / 2.0 - distanceFromCenterY + approachYOffset);
   }
 
+  /** Trench structures against the top and bottom field walls at each hub's X coordinate. */
+  public static class Trench {
+    // Physical dimensions (from 6328 FieldConstants)
+    public static final double width = Units.inchesToMeters(65.63); // Along wall
+    public static final double depth = Units.inchesToMeters(47.01); // Extends from wall into field
+    public static final double openingWidth = Units.inchesToMeters(50.35); // Drive-through opening
+    public static final double openingHeight = Units.inchesToMeters(22.25); // Height clearance
+
+    // Blue alliance trenches (centered at blue hub X)
+    public static final Translation2d blueTopCenter =
+        new Translation2d(Hub.blueCenter.getX(), fieldWidth - depth / 2.0);
+    public static final Translation2d blueBottomCenter =
+        new Translation2d(Hub.blueCenter.getX(), depth / 2.0);
+
+    // Red alliance trenches (centered at red hub X)
+    public static final Translation2d redTopCenter =
+        new Translation2d(Hub.redCenter.getX(), fieldWidth - depth / 2.0);
+    public static final Translation2d redBottomCenter =
+        new Translation2d(Hub.redCenter.getX(), depth / 2.0);
+
+    // Entry Y coordinates (where the opening faces the field interior)
+    public static final double topTrenchEntryY = fieldWidth - depth;
+    public static final double bottomTrenchEntryY = depth;
+  }
+
   /** Get the hub center for the specified alliance. */
   public static Translation2d getHubCenter(boolean isRedAlliance) {
     return isRedAlliance ? Hub.redCenter : Hub.blueCenter;
