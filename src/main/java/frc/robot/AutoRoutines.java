@@ -18,9 +18,16 @@ import frc.robot.subsystems.indexer.Indexer;
 import frc.robot.subsystems.intake.Intake;
 import frc.robot.subsystems.shooter.Shooter;
 import frc.robot.subsystems.shooter.ShooterConstants;
+import frc.robot.util.LoggedTunableNumber;
 import java.util.Optional;
 
 public class AutoRoutines {
+  // 0 = shoot in place, 1 = creep toward Points start while shooting (tunable from dashboard)
+  private static final LoggedTunableNumber trenchShootOnMove =
+      new LoggedTunableNumber("Auto/TrenchShootOnMove", 0.0);
+  private static final LoggedTunableNumber trenchCreepSpeedMps =
+      new LoggedTunableNumber("Auto/TrenchCreepSpeedMps", 0.75);
+
   private final AutoFactory factory;
   private final Drive drive;
   private final Intake intake;
@@ -224,50 +231,83 @@ public class AutoRoutines {
   }
 
   /**
-   * Trench Outpost Disrupt: Drives out to the trench via TrenchOutpostDisrupt, then returns to the
-   * starting spot while shooting (Y-direction first, then X), then runs TrenchOutpostExit for a
-   * second pass to a shooting position.
+   * Trench Outpost Disrupt: Runs TrenchOutpostDisrupt trajectory (rams opponent), deploys intake at
+   * "Intake" waypoint, spins up shooter at "Spin" waypoint. After trajectory ends, aims and shoots
+   * (stationary or creeping toward Points start based on Auto/TrenchShootOnMove tunable). Then runs
+   * TrenchOutpostPoints for a second scoring pass.
    */
   public AutoRoutine trenchOutpostDisrupt() {
-    AutoRoutine routine = factory.newRoutine("Trench Outpost Disrupt");
-    AutoTrajectory disruptTraj = routine.trajectory("TrenchOutpostDisrupt");
-    AutoTrajectory exitTraj = routine.trajectory("TrenchOutpostExit");
+    return buildTrenchDisrupt(
+        "Trench Outpost Disrupt",
+        routine -> routine.trajectory("TrenchOutpostDisrupt"),
+        routine -> routine.trajectory("TrenchOutpostPoints"));
+  }
+
+  /** Trench Depot Disrupt: Mirrors outpost disrupt to the depot side via mirrorY(). */
+  public AutoRoutine trenchDepotDisrupt() {
+    return buildTrenchDisrupt(
+        "Trench Depot Disrupt",
+        routine -> routine.trajectory("TrenchOutpostDisrupt").mirrorY(),
+        routine -> routine.trajectory("TrenchOutpostPoints").mirrorY());
+  }
+
+  /**
+   * Trench Outpost Points: Deploys intake immediately, runs TrenchOutpostPoints trajectory. Spins
+   * up shooter at "Spin" waypoint. After trajectory ends, aims and shoots (stationary or creeping
+   * toward Points start based on Auto/TrenchShootOnMove tunable). Then runs Points again.
+   */
+  public AutoRoutine trenchOutpostPoints() {
+    return buildTrenchPoints(
+        "Trench Outpost Points", routine -> routine.trajectory("TrenchOutpostPoints"));
+  }
+
+  /** Trench Depot Points: Mirrors outpost points to the depot side via mirrorY(). */
+  public AutoRoutine trenchDepotPoints() {
+    return buildTrenchPoints(
+        "Trench Depot Points", routine -> routine.trajectory("TrenchOutpostPoints").mirrorY());
+  }
+
+  /**
+   * Builds a trench disrupt auto. Runs the disrupt trajectory (intake at "Intake" waypoint, shooter
+   * spinup at "Spin" waypoint), then aims and shoots, then runs the points trajectory for cycle 2.
+   */
+  private AutoRoutine buildTrenchDisrupt(
+      String name,
+      java.util.function.Function<AutoRoutine, AutoTrajectory> disruptFactory,
+      java.util.function.Function<AutoRoutine, AutoTrajectory> pointsFactory) {
+    AutoRoutine routine = factory.newRoutine(name);
+    AutoTrajectory disruptTraj = disruptFactory.apply(routine);
+    AutoTrajectory pointsTraj = pointsFactory.apply(routine);
+
+    // Deploy intake at the "Intake" waypoint on the disrupt trajectory
+    disruptTraj.atTime("Intake").onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
+    // Spin up shooter at the "Spin" waypoint (before crossing bump)
+    disruptTraj.atTime("Spin").onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)));
 
     routine
         .active()
         .onTrue(
             Commands.sequence(
-                // Seed odometry from disrupt trajectory start
                 disruptTraj.resetOdometry(),
 
-                // Go disrupt the trench (no intake)
+                // Rush out; intake and shooter activate via waypoint events
                 disruptTraj.cmd(),
 
-                // Spin up shooter for return journey
-                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+                // Retract intake for shooting
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
 
-                // Shoot while driving back to starting spot (Y-direction first, then X)
-                Commands.parallel(
-                        driveYThenXAimingAtHub(exitTraj.getInitialPose().orElse(new Pose2d())),
-                        Commands.sequence(
-                            Commands.waitUntil(() -> shooter.isAtSetpoint()),
-                            indexer.feedCommand()),
-                        intake.periodicAutoRehomeCommand())
-                    .withTimeout(5.0),
+                // Aim and shoot — stationary or creeping toward Points start
+                trenchShootSequence(pointsTraj.getInitialPose().orElse(new Pose2d())),
 
-                // Fine-tune to exact TrenchOutpostExit start
-                sprintToPose(exitTraj.getInitialPose().orElse(new Pose2d())).withTimeout(2.0),
+                // Cycle 2: deploy intake and run Points trajectory
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
+                pointsTraj.cmd(),
 
-                // Run TrenchOutpostExit for second pass
-                exitTraj.cmd(),
+                // Retract intake for shooting
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
 
-                // Aim at hub and feed for remaining time
-                Commands.deadline(
-                    Commands.sequence(
-                        Commands.waitSeconds(0.5),
-                        Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                        intake.periodicAutoRehomeCommand().withTimeout(8.0)),
-                    aimBackAtHub()),
+                // Final shoot
+                trenchShootSequence(pointsTraj.getInitialPose().orElse(new Pose2d())),
 
                 // Cleanup
                 Commands.runOnce(
@@ -281,56 +321,44 @@ public class AutoRoutines {
   }
 
   /**
-   * Trench Outpost Rush: Drives out to the trench via TrenchOutpostDisrupt, deploying intake after
-   * reaching the first waypoint to collect pieces. Returns to starting spot while shooting
-   * (Y-direction first, then X), then runs TrenchOutpostExit for a second pass.
+   * Builds a trench points auto. Deploys intake immediately, runs the points trajectory (shooter
+   * spinup at "Spin" waypoint), then aims and shoots, then runs Points again for cycle 2.
    */
-  public AutoRoutine trenchOutpostRush() {
-    AutoRoutine routine = factory.newRoutine("Trench Outpost Rush");
-    AutoTrajectory disruptTraj = routine.trajectory("TrenchOutpostDisrupt");
-    AutoTrajectory exitTraj = routine.trajectory("TrenchOutpostExit");
+  private AutoRoutine buildTrenchPoints(
+      String name, java.util.function.Function<AutoRoutine, AutoTrajectory> pointsFactory) {
+    AutoRoutine routine = factory.newRoutine(name);
+    AutoTrajectory pointsTraj = pointsFactory.apply(routine);
 
-    // Deploy intake when the robot reaches the first intermediate waypoint (~1.25s in)
-    disruptTraj
-        .atTime(1.25256)
-        .onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
+    // Spin up shooter at the "Spin" waypoint (before crossing bump)
+    pointsTraj.atTime("Spin").onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)));
 
     routine
         .active()
         .onTrue(
             Commands.sequence(
-                // Seed odometry from disrupt trajectory start
-                disruptTraj.resetOdometry(),
+                pointsTraj.resetOdometry(),
 
-                // Rush into trench; intake deploys via event trigger at first waypoint
-                disruptTraj.cmd(),
+                // Deploy intake right away
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
 
-                // Retract intake, spin up shooter for return
+                // Follow Points trajectory; shooter spins up at "Spin" waypoint
+                pointsTraj.cmd(),
+
+                // Retract intake for shooting
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
-                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
 
-                // Shoot while driving back to starting spot (Y-direction first, then X)
-                Commands.parallel(
-                        driveYThenXAimingAtHub(exitTraj.getInitialPose().orElse(new Pose2d())),
-                        Commands.sequence(
-                            Commands.waitUntil(() -> shooter.isAtSetpoint()),
-                            indexer.feedCommand()),
-                        intake.periodicAutoRehomeCommand())
-                    .withTimeout(5.0),
+                // Aim and shoot — stationary or creeping toward Points start
+                trenchShootSequence(pointsTraj.getInitialPose().orElse(new Pose2d())),
 
-                // Fine-tune to exact TrenchOutpostExit start
-                sprintToPose(exitTraj.getInitialPose().orElse(new Pose2d())).withTimeout(2.0),
+                // Cycle 2: deploy intake and run Points again
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
+                pointsTraj.cmd(),
 
-                // Run TrenchOutpostExit for second pass
-                exitTraj.cmd(),
+                // Retract intake for final shoot
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
 
-                // Aim at hub and feed for remaining time
-                Commands.deadline(
-                    Commands.sequence(
-                        Commands.waitSeconds(0.5),
-                        Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                        intake.periodicAutoRehomeCommand().withTimeout(8.0)),
-                    aimBackAtHub()),
+                // Final shoot
+                trenchShootSequence(pointsTraj.getInitialPose().orElse(new Pose2d())),
 
                 // Cleanup
                 Commands.runOnce(
@@ -341,6 +369,65 @@ public class AutoRoutines {
                     })));
 
     return routine;
+  }
+
+  /**
+   * Aims at hub and feeds. When Auto/TrenchShootOnMove is 0, shoots in place. When 1, slowly creeps
+   * toward {@code nextPose} while shooting at Auto/TrenchCreepSpeedMps. Switchable from the
+   * dashboard without redeploying.
+   */
+  private Command trenchShootSequence(Pose2d nextPose) {
+    ProfiledPIDController headingController =
+        new ProfiledPIDController(5.0, 0, 0.4, new TrapezoidProfile.Constraints(8.0, 20.0));
+    headingController.enableContinuousInput(-Math.PI, Math.PI);
+
+    Command aimAndDrive =
+        Commands.run(
+                () -> {
+                  Pose2d current = drive.getPose();
+                  boolean isRed =
+                      DriverStation.getAlliance().isPresent()
+                          && DriverStation.getAlliance().get() == Alliance.Red;
+
+                  // Heading: back of robot aimed at hub
+                  Translation2d hubCenter = FieldConstants.getHubCenter(isRed);
+                  Translation2d toHub = hubCenter.minus(current.getTranslation());
+                  double angleToHub = Math.atan2(toHub.getY(), toHub.getX());
+                  double targetHeading =
+                      angleToHub
+                          + Math.PI
+                          + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
+                  double omega =
+                      headingController.calculate(
+                          current.getRotation().getRadians(), targetHeading);
+
+                  // Translation: stationary or creep toward next pose
+                  double vx = 0;
+                  double vy = 0;
+                  if (trenchShootOnMove.get() > 0.5) {
+                    Translation2d toNext =
+                        nextPose.getTranslation().minus(current.getTranslation());
+                    if (toNext.getNorm() > 0.2) {
+                      double angle = Math.atan2(toNext.getY(), toNext.getX());
+                      double speed = trenchCreepSpeedMps.get();
+                      vx = Math.cos(angle) * speed;
+                      vy = Math.sin(angle) * speed;
+                    }
+                  }
+
+                  drive.runVelocity(
+                      ChassisSpeeds.fromFieldRelativeSpeeds(vx, vy, omega, current.getRotation()));
+                },
+                drive)
+            .beforeStarting(() -> headingController.reset(drive.getRotation().getRadians()));
+
+    return Commands.deadline(
+        Commands.sequence(
+            Commands.waitUntil(() -> shooter.isAtSetpoint()),
+            Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+            intake.periodicAutoRehomeCommand().withTimeout(5.0),
+            Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.IDLE))),
+        aimAndDrive);
   }
 
   /**
@@ -606,14 +693,16 @@ public class AutoRoutines {
                 // Phase 1: drive in Y direction
                 double speed =
                     Math.min(
-                        drive.getMaxLinearSpeedMetersPerSec(), Math.max(0.5, Math.abs(yError) * 3.0));
+                        drive.getMaxLinearSpeedMetersPerSec(),
+                        Math.max(0.5, Math.abs(yError) * 3.0));
                 vy = Math.signum(yError) * speed;
                 vx = 0;
               } else {
                 // Phase 2: drive in X direction
                 double speed =
                     Math.min(
-                        drive.getMaxLinearSpeedMetersPerSec(), Math.max(0.5, Math.abs(xError) * 3.0));
+                        drive.getMaxLinearSpeedMetersPerSec(),
+                        Math.max(0.5, Math.abs(xError) * 3.0));
                 vx = Math.signum(xError) * speed;
                 vy = 0;
               }

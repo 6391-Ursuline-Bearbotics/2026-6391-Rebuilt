@@ -98,6 +98,7 @@ public class Intake extends SubsystemBase {
   // State
   private Goal goal = Goal.IDLE;
   private DeployState deployState = DeployState.RETRACTED;
+  private boolean shootingPressureMode = false;
   private double deployedPositionRad = 0.0;
   private boolean rehomeRequested = false;
   // Latches true when pushed back past threshold; stays true until fully returned to deployed
@@ -146,6 +147,25 @@ public class Intake extends SubsystemBase {
   @AutoLogOutput(key = "Intake/Goal")
   public Goal getGoal() {
     return goal;
+  }
+
+  @AutoLogOutput(key = "Intake/ShootingPressureMode")
+  public boolean isShootingPressureMode() {
+    return shootingPressureMode;
+  }
+
+  /** Enables or disables shooting pressure mode (continuous retraction voltage at hard stop). */
+  public void setShootingPressureMode(boolean enable) {
+    shootingPressureMode = enable;
+  }
+
+  /**
+   * Applies continuous retraction pressure while active, keeping the intake pressed against the
+   * indexer during shooting. Does not require the intake subsystem.
+   */
+  public Command shootingPressureCommand() {
+    return Commands.startEnd(
+        () -> setShootingPressureMode(true), () -> setShootingPressureMode(false));
   }
 
   @AutoLogOutput(key = "Intake/DeployState")
@@ -280,7 +300,8 @@ public class Intake extends SubsystemBase {
         if (goalWantsDeploy) {
           transitionTo(DeployState.DEPLOYING);
           deployIO.setVoltage(deployVoltage.get());
-        } else if (stallTimer.hasElapsed(IntakeConstants.deployInrushIgnoreTime)
+        } else if (!shootingPressureMode
+            && stallTimer.hasElapsed(IntakeConstants.deployInrushIgnoreTime)
             && deployInputs.statorCurrentAmps > retractStallCurrentThreshold.get()) {
           transitionTo(DeployState.RETRACTED);
           deployIO.stop();

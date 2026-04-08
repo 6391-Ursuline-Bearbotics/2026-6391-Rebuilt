@@ -27,6 +27,7 @@ import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
@@ -227,6 +228,10 @@ public class RobotContainer {
     // Set up Choreo auto factory, routines, and chooser
     autoFactory =
         new AutoFactory(drive::getPose, drive::setPose, drive::followTrajectory, true, drive);
+
+    // Preload Choreo classes at init time instead of delaying auto start (v2026.0.3)
+    CommandScheduler.getInstance().schedule(autoFactory.warmupCmd());
+
     autoRoutines = new AutoRoutines(autoFactory, drive, intake, indexer, shooter);
     autoChooser = new AutoChooser();
     SmartDashboard.putData("Auto Choices", autoChooser);
@@ -248,7 +253,9 @@ public class RobotContainer {
     autoChooser.addRoutine(
         "Outpost Single Pass (Shoot First)", autoRoutines::outpostSinglePassShootFirst);
     autoChooser.addRoutine("Trench Outpost Disrupt", autoRoutines::trenchOutpostDisrupt);
-    autoChooser.addRoutine("Trench Outpost Rush", autoRoutines::trenchOutpostRush);
+    autoChooser.addRoutine("Trench Outpost Points", autoRoutines::trenchOutpostPoints);
+    autoChooser.addRoutine("Trench Depot Disrupt", autoRoutines::trenchDepotDisrupt);
+    autoChooser.addRoutine("Trench Depot Points", autoRoutines::trenchDepotPoints);
     autoChooser.addRoutine("Safe", autoRoutines::safe);
     autoChooser.addRoutine("Safe (Shoot First)", autoRoutines::safeShootFirst);
     autoChooser.addRoutine("Shoot Only", autoRoutines::shootOnly);
