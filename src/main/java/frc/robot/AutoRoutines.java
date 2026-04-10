@@ -22,6 +22,10 @@ import frc.robot.util.LoggedTunableNumber;
 import java.util.Optional;
 
 public class AutoRoutines {
+  // How long to feed the indexer when shooting in auto (smaller hopper = shorter shoot)
+  private static final LoggedTunableNumber shootDurationSecs =
+      new LoggedTunableNumber("Auto/ShootDurationSecs", 2.0);
+
   // 0 = shoot in place, 1 = creep toward Points start while shooting (tunable from dashboard)
   private static final LoggedTunableNumber trenchShootOnMove =
       new LoggedTunableNumber("Auto/TrenchShootOnMove", 0.0);
@@ -269,7 +273,8 @@ public class AutoRoutines {
 
   /**
    * Builds a trench disrupt auto. Runs the disrupt trajectory (intake at "Intake" waypoint, shooter
-   * spinup at "Spin" waypoint), then aims and shoots, then runs the points trajectory for cycle 2.
+   * spinup at "Spin" waypoint), then aims and shoots, then repeats Points trajectory cycles until
+   * auto ends.
    */
   private AutoRoutine buildTrenchDisrupt(
       String name,
@@ -299,30 +304,16 @@ public class AutoRoutines {
                 // Aim and shoot — stationary or creeping toward Points start
                 trenchShootSequence(pointsTraj.getInitialPose().orElse(new Pose2d())),
 
-                // Cycle 2: deploy intake and run Points trajectory
-                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
-                pointsTraj.cmd(),
-
-                // Retract intake for shooting
-                Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
-
-                // Final shoot
-                trenchShootSequence(pointsTraj.getInitialPose().orElse(new Pose2d())),
-
-                // Cleanup
-                Commands.runOnce(
-                    () -> {
-                      shooter.setGoal(Shooter.Goal.IDLE);
-                      indexer.setGoal(Indexer.Goal.IDLE);
-                      intake.setGoal(Intake.Goal.IDLE);
-                    })));
+                // Repeat: run Points trajectory, shoot, loop until auto ends
+                trenchPointsCycle(pointsTraj)));
 
     return routine;
   }
 
   /**
    * Builds a trench points auto. Deploys intake immediately, runs the points trajectory (shooter
-   * spinup at "Spin" waypoint), then aims and shoots, then runs Points again for cycle 2.
+   * spinup at "Spin" waypoint), then aims and shoots, then repeats Points trajectory cycles until
+   * auto ends.
    */
   private AutoRoutine buildTrenchPoints(
       String name, java.util.function.Function<AutoRoutine, AutoTrajectory> pointsFactory) {
@@ -350,25 +341,23 @@ public class AutoRoutines {
                 // Aim and shoot — stationary or creeping toward Points start
                 trenchShootSequence(pointsTraj.getInitialPose().orElse(new Pose2d())),
 
-                // Cycle 2: deploy intake and run Points again
-                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
-                pointsTraj.cmd(),
-
-                // Retract intake for final shoot
-                Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
-
-                // Final shoot
-                trenchShootSequence(pointsTraj.getInitialPose().orElse(new Pose2d())),
-
-                // Cleanup
-                Commands.runOnce(
-                    () -> {
-                      shooter.setGoal(Shooter.Goal.IDLE);
-                      indexer.setGoal(Indexer.Goal.IDLE);
-                      intake.setGoal(Intake.Goal.IDLE);
-                    })));
+                // Repeat: run Points trajectory, shoot, loop until auto ends
+                trenchPointsCycle(pointsTraj)));
 
     return routine;
+  }
+
+  /**
+   * Repeating cycle: deploy intake, run Points trajectory, retract, shoot. Loops until auto ends
+   * (command is interrupted by the scheduler when autonomous period expires).
+   */
+  private Command trenchPointsCycle(AutoTrajectory pointsTraj) {
+    return Commands.sequence(
+            Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
+            pointsTraj.cmd(),
+            Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
+            trenchShootSequence(pointsTraj.getInitialPose().orElse(new Pose2d())))
+        .repeatedly();
   }
 
   /**
@@ -425,7 +414,7 @@ public class AutoRoutines {
         Commands.sequence(
             Commands.waitUntil(() -> shooter.isAtSetpoint()),
             Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-            intake.periodicAutoRehomeCommand().withTimeout(5.0),
+            Commands.waitSeconds(shootDurationSecs.get()),
             Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.IDLE))),
         aimAndDrive);
   }
@@ -499,22 +488,38 @@ public class AutoRoutines {
                 // crossing)
                 sprintToPose(bumpReturn.getFinalPose().orElse(new Pose2d())).withTimeout(2.0),
 
-                // Aim at hub continuously while feeding/shooting for remaining time;
-                // deadline ends when the feed sequence finishes
+                // Aim at hub and shoot for configured duration
                 Commands.deadline(
                     Commands.sequence(
-                        Commands.waitSeconds(1.0),
+                        Commands.waitSeconds(0.5),
                         Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                        intake.periodicAutoRehomeCommand().withTimeout(10.0)),
+                        Commands.waitSeconds(shootDurationSecs.get()),
+                        Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.IDLE))),
                     aimBackAtHub()),
 
-                // Cleanup
-                Commands.runOnce(
-                    () -> {
-                      shooter.setGoal(Shooter.Goal.IDLE);
-                      indexer.setGoal(Indexer.Goal.IDLE);
-                      intake.setGoal(Intake.Goal.IDLE);
-                    })));
+                // Continue cycling: deploy intake, cross bump, collect, return, shoot — repeats
+                // until auto ends
+                Commands.sequence(
+                        Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
+                        bump.cmd(),
+                        sprintToPose(doublePass.getInitialPose().orElse(new Pose2d()))
+                            .withTimeout(3.0),
+                        doublePass.cmd(),
+                        Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+                        Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
+                        sprintToPose(bumpReturn.getInitialPose().orElse(new Pose2d()))
+                            .withTimeout(3.0),
+                        bumpReturn.cmd(),
+                        sprintToPose(bumpReturn.getFinalPose().orElse(new Pose2d()))
+                            .withTimeout(2.0),
+                        Commands.deadline(
+                            Commands.sequence(
+                                Commands.waitSeconds(0.5),
+                                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                                Commands.waitSeconds(shootDurationSecs.get()),
+                                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.IDLE))),
+                            aimBackAtHub()))
+                    .repeatedly()));
 
     return routine;
   }
