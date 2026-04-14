@@ -22,8 +22,8 @@ public final class IndexerConstants {
   public static final double kickerGearRatio = 1.0;
   public static final boolean kickerMotorInverted = true;
   public static final double kickerStatorCurrentLimit = 80.0;
-  public static final double kickerFeedVelocityRPM = 4000.0;
-  public static final double kickerEjectVelocityRPM = -4000.0;
+  public static final double kickerFeedVelocityRPM = 2900.0;
+  public static final double kickerEjectVelocityRPM = -2900.0;
   public static final Slot0Configs kickerGains =
       new Slot0Configs().withKP(0.1).withKV(0.12).withKS(0.0);
 

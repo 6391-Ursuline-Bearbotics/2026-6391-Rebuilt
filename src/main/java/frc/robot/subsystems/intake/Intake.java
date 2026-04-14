@@ -55,7 +55,7 @@ public class Intake extends SubsystemBase {
   private static final LoggedTunableNumber positionHoldThresholdRad =
       new LoggedTunableNumber("Intake/Deploy/PositionHoldThresholdRad", 0.15);
   private static final LoggedTunableNumber positionHoldVoltage =
-      new LoggedTunableNumber("Intake/Deploy/PositionHoldVoltage", 2.8);
+      new LoggedTunableNumber("Intake/Deploy/PositionHoldVoltage", 0);
   private static final LoggedTunableNumber positionHoldYieldCurrentAmps =
       new LoggedTunableNumber("Intake/Deploy/PositionHoldYieldCurrentAmps", 30.0);
   private static final LoggedTunableNumber positionHoldTimeoutSecs =
