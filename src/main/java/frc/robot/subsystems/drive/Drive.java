@@ -13,6 +13,7 @@ import choreo.trajectory.SwerveSample;
 import edu.wpi.first.hal.FRCNetComm.tInstances;
 import edu.wpi.first.hal.FRCNetComm.tResourceType;
 import edu.wpi.first.hal.HAL;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.estimator.SwerveDrivePoseEstimator;
@@ -393,6 +394,12 @@ public class Drive extends SubsystemBase {
   /** Returns the current odometry rotation. */
   public Rotation2d getRotation() {
     return getPose().getRotation();
+  }
+
+  /** Returns true if the robot heading is within toleranceDeg degrees of the target rotation. */
+  public boolean isHeadingAt(Rotation2d target, double toleranceDeg) {
+    double errorRad = Math.abs(MathUtil.angleModulus(getRotation().minus(target).getRadians()));
+    return errorRad < Math.toRadians(toleranceDeg);
   }
 
   /** Returns the current pitch angle in radians from the gyro. */

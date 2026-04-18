@@ -24,7 +24,7 @@ import java.util.Optional;
 public class AutoRoutines {
   // How long to feed the indexer when shooting in auto (smaller hopper = shorter shoot)
   private static final LoggedTunableNumber shootDurationSecs =
-      new LoggedTunableNumber("Auto/ShootDurationSecs", 2.0);
+      new LoggedTunableNumber("Auto/ShootDurationSecs", 10.0);
 
   // 0 = shoot in place, 1 = creep toward Points start while shooting (tunable from dashboard)
   private static final LoggedTunableNumber trenchShootOnMove =
@@ -416,7 +416,8 @@ public class AutoRoutines {
             Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
             Commands.waitSeconds(shootDurationSecs.get()),
             Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.IDLE))),
-        aimAndDrive);
+        aimAndDrive,
+        intake.periodicAutoRehomeCommand());
   }
 
   /**
@@ -491,11 +492,29 @@ public class AutoRoutines {
                 // Aim at hub and shoot for configured duration
                 Commands.deadline(
                     Commands.sequence(
-                        Commands.waitSeconds(0.5),
+                        Commands.waitUntil(
+                                () -> {
+                                  boolean isRed =
+                                      DriverStation.getAlliance().isPresent()
+                                          && DriverStation.getAlliance().get() == Alliance.Red;
+                                  Translation2d toHub =
+                                      FieldConstants.getHubCenter(isRed)
+                                          .minus(drive.getPose().getTranslation());
+                                  double targetHeading =
+                                      Math.atan2(toHub.getY(), toHub.getX())
+                                          + Math.PI
+                                          + Math.toRadians(
+                                              ShooterConstants.shooterHeadingOffsetDegrees);
+                                  return shooter.isAtSetpoint()
+                                      && drive.isHeadingAt(
+                                          Rotation2d.fromRadians(targetHeading), 3.0);
+                                })
+                            .withTimeout(1.5),
                         Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
                         Commands.waitSeconds(shootDurationSecs.get()),
                         Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.IDLE))),
-                    aimBackAtHub()),
+                    aimBackAtHub(),
+                    intake.periodicAutoRehomeCommand()),
 
                 // Continue cycling: deploy intake, cross bump, collect, return, shoot — repeats
                 // until auto ends
@@ -514,7 +533,25 @@ public class AutoRoutines {
                             .withTimeout(2.0),
                         Commands.deadline(
                             Commands.sequence(
-                                Commands.waitSeconds(0.5),
+                                Commands.waitUntil(
+                                        () -> {
+                                          boolean isRed =
+                                              DriverStation.getAlliance().isPresent()
+                                                  && DriverStation.getAlliance().get()
+                                                      == Alliance.Red;
+                                          Translation2d toHub =
+                                              FieldConstants.getHubCenter(isRed)
+                                                  .minus(drive.getPose().getTranslation());
+                                          double targetHeading =
+                                              Math.atan2(toHub.getY(), toHub.getX())
+                                                  + Math.PI
+                                                  + Math.toRadians(
+                                                      ShooterConstants.shooterHeadingOffsetDegrees);
+                                          return shooter.isAtSetpoint()
+                                              && drive.isHeadingAt(
+                                                  Rotation2d.fromRadians(targetHeading), 3.0);
+                                        })
+                                    .withTimeout(1.5),
                                 Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
                                 Commands.waitSeconds(shootDurationSecs.get()),
                                 Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.IDLE))),
