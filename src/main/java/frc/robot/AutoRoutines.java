@@ -24,7 +24,7 @@ import java.util.Optional;
 public class AutoRoutines {
   // How long to feed the indexer when shooting in auto (smaller hopper = shorter shoot)
   private static final LoggedTunableNumber shootDurationSecs =
-      new LoggedTunableNumber("Auto/ShootDurationSecs", 8.0);
+      new LoggedTunableNumber("Auto/ShootDurationSecs", 5.0);
 
   // 0 = shoot in place, 1 = creep toward Points start while shooting (tunable from dashboard)
   private static final LoggedTunableNumber trenchShootOnMove =
