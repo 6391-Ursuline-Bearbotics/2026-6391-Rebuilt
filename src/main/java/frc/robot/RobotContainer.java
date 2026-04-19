@@ -380,18 +380,14 @@ public class RobotContainer {
                   drive.clearMaxSpeedOverride();
                 }));
 
-    // Operator indexer controls (ungated feed + auto-spinup + gyration + intake rehome)
+    // Operator indexer controls (ungated feed + auto-spinup + adaptive intake)
     op.leftTrigger(0.5)
         .whileTrue(
             Commands.sequence(
-                    Commands.runOnce(
-                        () -> {
-                          shooter.setGoal(Shooter.Goal.SHOOT);
-                        }),
+                    Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
                     Commands.run(() -> indexer.setGoal(Indexer.Goal.FEED))
                         .finallyDo(() -> indexer.setGoal(Indexer.Goal.IDLE)))
-                .finallyDo(() -> autoAimGyrating = false)
-                .alongWith(intake.periodicAutoRehomeCommand()));
+                .alongWith(intakeWithMotionAdaptiveRehome()));
 
     // Left bumper: Gated auto shot with intake deployed + running (hold to shoot, release to
     // retract)
@@ -443,7 +439,7 @@ public class RobotContainer {
                       currentDriveMode = DriveMode.STANDARD;
                       autoAimGyrating = false;
                     })
-                .alongWith(intake.periodicAutoRehomeCommand()));
+                .alongWith(intakeWithMotionAdaptiveRehome()));
 
     // DPAD: Manual distance setpoint + spin up shooter
     // Left = 5ft, Right = 10ft, Up = +0.5ft, Down = -0.5ft
@@ -569,6 +565,45 @@ public class RobotContainer {
   {
     snakeAngleController.enableContinuousInput(-Math.PI, Math.PI);
     aimTargetController.enableContinuousInput(-Math.PI, Math.PI);
+  }
+
+  /**
+   * Returns a command that keeps the intake in INTAKE while the robot is moving, and runs a
+   * periodic brief IDLE rehome cycle when stationary to keep the mechanism seated. Speed threshold
+   * is 0.15 m/s; rehome fires every 1.5s and lasts 0.3s before returning to INTAKE.
+   */
+  private Command intakeWithMotionAdaptiveRehome() {
+    edu.wpi.first.wpilibj.Timer rehomeTimer = new edu.wpi.first.wpilibj.Timer();
+    boolean[] rehoming = {false};
+    return Commands.runOnce(
+            () -> {
+              rehomeTimer.restart();
+              rehoming[0] = false;
+              intake.setGoal(Intake.Goal.INTAKE);
+            })
+        .andThen(
+            Commands.run(
+                () -> {
+                  ChassisSpeeds speeds = drive.getFieldRelativeSpeeds();
+                  double speed =
+                      Math.hypot(speeds.vxMetersPerSecond, speeds.vyMetersPerSecond);
+                  if (speed > 0.15) {
+                    // Moving: stay in INTAKE and reset the rehome cycle
+                    intake.setGoal(Intake.Goal.INTAKE);
+                    rehoming[0] = false;
+                    rehomeTimer.restart();
+                  } else if (!rehoming[0] && rehomeTimer.hasElapsed(1.5)) {
+                    // Stationary: trigger brief rehome
+                    intake.setGoal(Intake.Goal.IDLE);
+                    rehomeTimer.restart();
+                    rehoming[0] = true;
+                  } else if (rehoming[0] && rehomeTimer.hasElapsed(0.3)) {
+                    // Rehome done: return to INTAKE
+                    intake.setGoal(Intake.Goal.INTAKE);
+                    rehoming[0] = false;
+                    rehomeTimer.restart();
+                  }
+                }));
   }
 
   private void runStandardDrive() {

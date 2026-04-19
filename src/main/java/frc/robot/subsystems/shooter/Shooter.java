@@ -378,7 +378,35 @@ public class Shooter extends SubsystemBase {
     if (rpmOverride.get() != 0.0) {
       return rpmOverride.get();
     }
-    double baseRPM = distanceToRPM.get(distanceToTarget);
+
+    // Radial velocity compensation: when the robot moves away from the hub the ball has less
+    // net speed toward it, so look up RPM for a larger effective distance. Gated by the same
+    // shootOnMoveEnabled tunable as the lateral (heading) compensation.
+    double effectiveDistance = distanceToTarget;
+    if (shootOnMoveEnabled.get() > 0.5) {
+      ChassisSpeeds fieldSpeeds = fieldSpeedsSupplier.get();
+      Pose2d robotPose = poseSupplier.get();
+      boolean isRed =
+          DriverStation.getAlliance().isPresent()
+              && DriverStation.getAlliance().get() == Alliance.Red;
+      Translation2d toHub =
+          FieldConstants.getHubCenter(isRed).minus(robotPose.getTranslation());
+      double dist = toHub.getNorm();
+      if (dist > 0.01) {
+        // Unit vector from robot toward hub
+        double ux = toHub.getX() / dist;
+        double uy = toHub.getY() / dist;
+        // Positive = moving toward hub, negative = moving away
+        double vRadialTowardHub =
+            fieldSpeeds.vxMetersPerSecond * ux + fieldSpeeds.vyMetersPerSecond * uy;
+        double tof = distanceToTOF.get(distanceToTarget);
+        // Moving away reduces ball speed toward hub — compensate by boosting effective distance
+        effectiveDistance = distanceToTarget - vRadialTowardHub * tof;
+      }
+    }
+    Logger.recordOutput("Shooter/EffectiveDistance", effectiveDistance);
+
+    double baseRPM = distanceToRPM.get(effectiveDistance);
 
     // Apply pitch compensation outside the dead zone
     double pitch = pitchSupplier.get();

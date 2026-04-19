@@ -27,7 +27,7 @@ import java.util.function.DoubleSupplier;
 public class AutoRoutines {
   // How long to feed the indexer when shooting in auto (smaller hopper = shorter shoot)
   private static final LoggedTunableNumber shootDurationSecs =
-      new LoggedTunableNumber("Auto/ShootDurationSecs", 10.0);
+      new LoggedTunableNumber("Auto/ShootDurationSecs", 4.0);
 
   // Max speed (m/s) while PIDing to the staging pose during the shoot sequence.
   private static final LoggedTunableNumber trenchStagingSpeedMps =
@@ -44,9 +44,15 @@ public class AutoRoutines {
   private static final LoggedTunableNumber trenchDepotStagingY =
       new LoggedTunableNumber("Auto/TrenchDepotStagingY", 7.55);
 
-  // Extra delay after shoot-first preload shot before starting the trajectory.
-  private static final LoggedTunableNumber shootFirstPostDelaySecs =
-      new LoggedTunableNumber("Auto/ShootFirstPostDelaySecs", 0.0);
+  // Extra delay (seconds) after shoot-first preload shot before starting the trajectory.
+  // Configured as a number on the dashboard so it works at competition without tuning mode.
+  // How long to settle after shooter reaches setpoint before feeding (lets heading PID converge).
+  private static final LoggedTunableNumber shootSettleSecs =
+      new LoggedTunableNumber("Auto/ShootSettleSecs", 0.5);
+
+  static {
+    edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.putNumber("Auto/ShootFirstDelaySecs", 2.0);
+  }
 
   private final AutoFactory factory;
   private final Drive drive;
@@ -102,7 +108,14 @@ public class AutoRoutines {
 
   public AutoRoutine outpostDoublePass() {
     return buildDoublePass(
-        "Outpost Double Pass", "OutpostBump", "OutpostDoublePass", "OutpostBumpReturn", false);
+        "Outpost Double Pass",
+        "OutpostBump",
+        "OutpostDoublePass",
+        "OutpostBumpReturn",
+        false,
+        routine -> routine.trajectory("OutpostStagingGather"),
+        trenchOutpostStagingX::get,
+        trenchOutpostStagingY::get);
   }
 
   public AutoRoutine outpostDoublePassShootFirst() {
@@ -111,27 +124,58 @@ public class AutoRoutines {
         "OutpostBump",
         "OutpostDoublePass",
         "OutpostBumpReturn",
-        true);
+        true,
+        routine -> routine.trajectory("OutpostStagingGather"),
+        trenchOutpostStagingX::get,
+        trenchOutpostStagingY::get);
   }
 
   public AutoRoutine depotDoublePass() {
     return buildDoublePass(
-        "Depot Double Pass", "DepotBump", "DepotDoublePass", "DepotBumpReturn", false);
+        "Depot Double Pass",
+        "DepotBump",
+        "DepotDoublePass",
+        "DepotBumpReturn",
+        false,
+        routine -> routine.trajectory("OutpostStagingGather").mirrorY(),
+        trenchDepotStagingX::get,
+        trenchDepotStagingY::get);
   }
 
   public AutoRoutine depotDoublePassShootFirst() {
     return buildDoublePass(
-        "Depot Double Pass Shoot First", "DepotBump", "DepotDoublePass", "DepotBumpReturn", true);
+        "Depot Double Pass Shoot First",
+        "DepotBump",
+        "DepotDoublePass",
+        "DepotBumpReturn",
+        true,
+        routine -> routine.trajectory("OutpostStagingGather").mirrorY(),
+        trenchDepotStagingX::get,
+        trenchDepotStagingY::get);
   }
 
   public AutoRoutine outpostFullPass() {
     return buildDoublePass(
-        "Outpost FULL Pass", "OutpostBump", "FullOutpostSinglePass", "OutpostBumpReturn", false);
+        "Outpost FULL Pass",
+        "OutpostBump",
+        "FullOutpostSinglePass",
+        "OutpostBumpReturn",
+        false,
+        routine -> routine.trajectory("OutpostStagingGather"),
+        trenchOutpostStagingX::get,
+        trenchOutpostStagingY::get);
   }
 
   public AutoRoutine outpostSinglePass() {
     return buildDoublePass(
-        "Outpost Single Pass", "OutpostBump", "OutpostSinglePass", "OutpostBumpReturn", false);
+        "Outpost Single Pass",
+        "OutpostBump",
+        "OutpostSinglePass",
+        "OutpostBumpReturn",
+        false,
+        routine -> routine.trajectory("OutpostStagingGather"),
+        trenchOutpostStagingX::get,
+        trenchOutpostStagingY::get);
   }
 
   public AutoRoutine outpostSinglePassShootFirst() {
@@ -140,17 +184,34 @@ public class AutoRoutines {
         "OutpostBump",
         "OutpostSinglePass",
         "OutpostBumpReturn",
-        true);
+        true,
+        routine -> routine.trajectory("OutpostStagingGather"),
+        trenchOutpostStagingX::get,
+        trenchOutpostStagingY::get);
   }
 
   public AutoRoutine depotSinglePass() {
     return buildDoublePass(
-        "Depot Single Pass", "DepotBump", "DepotSinglePass", "DepotBumpReturn", false);
+        "Depot Single Pass",
+        "DepotBump",
+        "DepotSinglePass",
+        "DepotBumpReturn",
+        false,
+        routine -> routine.trajectory("OutpostStagingGather").mirrorY(),
+        trenchDepotStagingX::get,
+        trenchDepotStagingY::get);
   }
 
   public AutoRoutine depotSinglePassShootFirst() {
     return buildDoublePass(
-        "Depot Single Pass Shoot First", "DepotBump", "DepotSinglePass", "DepotBumpReturn", true);
+        "Depot Single Pass Shoot First",
+        "DepotBump",
+        "DepotSinglePass",
+        "DepotBumpReturn",
+        true,
+        routine -> routine.trajectory("OutpostStagingGather").mirrorY(),
+        trenchDepotStagingX::get,
+        trenchDepotStagingY::get);
   }
 
   /**
@@ -401,7 +462,12 @@ public class AutoRoutines {
                       indexer.setGoal(Indexer.Goal.IDLE);
                       shooter.setGoal(Shooter.Goal.IDLE);
                     }),
-                Commands.defer(() -> Commands.waitSeconds(shootFirstPostDelaySecs.get()), Set.of()),
+                Commands.defer(
+                    () ->
+                        Commands.waitSeconds(
+                            edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getNumber(
+                                "Auto/ShootFirstDelaySecs", 2.0)),
+                    Set.of()),
 
                 // Follow trajectory; intake and shooter activate via waypoint events
                 followTraj.cmd(),
@@ -466,9 +532,9 @@ public class AutoRoutines {
   }
 
   /**
-   * Aims the back of the robot at the hub and feeds. Simultaneously PID drives toward the tunable
-   * staging pose (Auto/TrenchStagingX/Y/Deg) near the side wall so the robot arrives at the trench
-   * entrance by the time shooting finishes. Heading and translation are decoupled.
+   * Aims the back of the robot at the hub and feeds while PID driving toward the tunable staging
+   * pose. The shooter's shoot-on-the-move compensation (radial + lateral) handles power adjustment
+   * for robot velocity.
    */
   private Command trenchShootSequence(DoubleSupplier stagingX, DoubleSupplier stagingY) {
     ProfiledPIDController headingController =
@@ -484,11 +550,10 @@ public class AutoRoutines {
                           && DriverStation.getAlliance().get() == Alliance.Red;
 
                   // Heading: back of robot aimed at hub
-                  Translation2d hubCenter = FieldConstants.getHubCenter(isRed);
-                  Translation2d toHub = hubCenter.minus(current.getTranslation());
-                  double angleToHub = Math.atan2(toHub.getY(), toHub.getX());
+                  Translation2d toHub =
+                      FieldConstants.getHubCenter(isRed).minus(current.getTranslation());
                   double targetHeading =
-                      angleToHub
+                      Math.atan2(toHub.getY(), toHub.getX())
                           + Math.PI
                           + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
                   double omega =
@@ -496,7 +561,6 @@ public class AutoRoutines {
                           current.getRotation().getRadians(), targetHeading);
 
                   // Translation: proportional drive toward staging pose near the wall.
-                  // Flip for red alliance using the same transform Choreo applies to trajectories.
                   Translation2d staging =
                       new Translation2d(stagingX.getAsDouble(), stagingY.getAsDouble());
                   if (ChoreoAllianceFlipUtil.shouldFlip()) {
@@ -522,6 +586,7 @@ public class AutoRoutines {
     return Commands.deadline(
         Commands.sequence(
             Commands.waitUntil(() -> shooter.isAtSetpoint()).withTimeout(2.0),
+            Commands.defer(() -> Commands.waitSeconds(shootSettleSecs.get()), Set.of()),
             Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
             Commands.defer(() -> Commands.waitSeconds(shootDurationSecs.get()), Set.of()),
             Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.IDLE))),
@@ -531,19 +596,23 @@ public class AutoRoutines {
 
   /**
    * Builds a double pass auto routine. Crosses bump, intakes across the field via trajectory,
-   * returns over bump, aims at hub, and feeds for remaining time. If shootFirst is true, shoots the
-   * preloaded ball before crossing the bump.
+   * returns over bump, then shoots on the move toward the staging pose and runs a gather pass. If
+   * shootFirst is true, shoots the preloaded ball before crossing the bump.
    */
   private AutoRoutine buildDoublePass(
       String name,
       String bumpTrajName,
       String doublePassTrajName,
       String bumpReturnTrajName,
-      boolean shootFirst) {
+      boolean shootFirst,
+      java.util.function.Function<AutoRoutine, AutoTrajectory> gatherFactory,
+      DoubleSupplier stagingX,
+      DoubleSupplier stagingY) {
     AutoRoutine routine = factory.newRoutine(name);
     AutoTrajectory bump = routine.trajectory(bumpTrajName);
     AutoTrajectory doublePass = routine.trajectory(doublePassTrajName);
     AutoTrajectory bumpReturn = routine.trajectory(bumpReturnTrajName);
+    AutoTrajectory gatherTraj = gatherFactory.apply(routine);
 
     // Build shoot-first prefix if needed
     Command shootFirstSequence =
@@ -558,7 +627,12 @@ public class AutoRoutines {
                       indexer.setGoal(Indexer.Goal.IDLE);
                       shooter.setGoal(Shooter.Goal.IDLE);
                     }),
-                Commands.defer(() -> Commands.waitSeconds(shootFirstPostDelaySecs.get()), Set.of()))
+                Commands.defer(
+                    () ->
+                        Commands.waitSeconds(
+                            edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getNumber(
+                                "Auto/ShootFirstDelaySecs", 2.0)),
+                    Set.of()))
             : Commands.none();
 
     routine
@@ -595,80 +669,16 @@ public class AutoRoutines {
                 // Cross back over bump via Choreo trajectory
                 bumpReturn.cmd(),
 
-                // Sprint to final shooting position after bump (corrects positional error from bump
-                // crossing)
+                // Correct positional error introduced by bump crossing
                 sprintToPose(bumpReturn.getFinalPose().orElse(new Pose2d())).withTimeout(2.0),
 
-                // Aim at hub and shoot for configured duration
-                Commands.deadline(
-                    Commands.sequence(
-                        Commands.waitUntil(
-                                () -> {
-                                  boolean isRed =
-                                      DriverStation.getAlliance().isPresent()
-                                          && DriverStation.getAlliance().get() == Alliance.Red;
-                                  Translation2d toHub =
-                                      FieldConstants.getHubCenter(isRed)
-                                          .minus(drive.getPose().getTranslation());
-                                  double targetHeading =
-                                      Math.atan2(toHub.getY(), toHub.getX())
-                                          + Math.PI
-                                          + Math.toRadians(
-                                              ShooterConstants.shooterHeadingOffsetDegrees);
-                                  return shooter.isAtSetpoint()
-                                      && drive.isHeadingAt(
-                                          Rotation2d.fromRadians(targetHeading), 3.0);
-                                })
-                            .withTimeout(1.5),
-                        Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                        Commands.defer(
-                            () -> Commands.waitSeconds(shootDurationSecs.get()), Set.of()),
-                        Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.IDLE))),
-                    aimBackAtHub(),
-                    intake.periodicAutoRehomeCommand()),
+                // Shoot on the move toward staging pose, then gather
+                trenchShootSequence(stagingX, stagingY),
+                trenchGatherRun(gatherTraj),
 
-                // Continue cycling: deploy intake, cross bump, collect, return, shoot — repeats
-                // until auto ends
-                Commands.sequence(
-                        Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
-                        bump.cmd(),
-                        sprintToPose(doublePass.getInitialPose().orElse(new Pose2d()))
-                            .withTimeout(3.0),
-                        doublePass.cmd(),
-                        Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
-                        Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
-                        sprintToPose(bumpReturn.getInitialPose().orElse(new Pose2d()))
-                            .withTimeout(3.0),
-                        bumpReturn.cmd(),
-                        sprintToPose(bumpReturn.getFinalPose().orElse(new Pose2d()))
-                            .withTimeout(2.0),
-                        Commands.deadline(
-                            Commands.sequence(
-                                Commands.waitUntil(
-                                        () -> {
-                                          boolean isRed =
-                                              DriverStation.getAlliance().isPresent()
-                                                  && DriverStation.getAlliance().get()
-                                                      == Alliance.Red;
-                                          Translation2d toHub =
-                                              FieldConstants.getHubCenter(isRed)
-                                                  .minus(drive.getPose().getTranslation());
-                                          double targetHeading =
-                                              Math.atan2(toHub.getY(), toHub.getX())
-                                                  + Math.PI
-                                                  + Math.toRadians(
-                                                      ShooterConstants.shooterHeadingOffsetDegrees);
-                                          return shooter.isAtSetpoint()
-                                              && drive.isHeadingAt(
-                                                  Rotation2d.fromRadians(targetHeading), 3.0);
-                                        })
-                                    .withTimeout(1.5),
-                                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                                Commands.defer(
-                                    () -> Commands.waitSeconds(shootDurationSecs.get()), Set.of()),
-                                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.IDLE))),
-                            aimBackAtHub()))
-                    .repeatedly()));
+                // If time remains after gather, retract intake and shoot again
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
+                trenchShootSequence(stagingX, stagingY)));
 
     return routine;
   }
@@ -694,7 +704,12 @@ public class AutoRoutines {
                       indexer.setGoal(Indexer.Goal.IDLE);
                       shooter.setGoal(Shooter.Goal.IDLE);
                     }),
-                Commands.defer(() -> Commands.waitSeconds(shootFirstPostDelaySecs.get()), Set.of()))
+                Commands.defer(
+                    () ->
+                        Commands.waitSeconds(
+                            edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getNumber(
+                                "Auto/ShootFirstDelaySecs", 2.0)),
+                    Set.of()))
             : Commands.none();
 
     // Spin up shooter on the "Shoot" event marker during trajectory
