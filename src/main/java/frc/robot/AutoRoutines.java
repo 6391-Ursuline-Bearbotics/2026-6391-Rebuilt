@@ -3,6 +3,7 @@ package frc.robot;
 import choreo.auto.AutoFactory;
 import choreo.auto.AutoRoutine;
 import choreo.auto.AutoTrajectory;
+import choreo.util.ChoreoAllianceFlipUtil;
 import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
@@ -21,17 +22,27 @@ import frc.robot.subsystems.shooter.ShooterConstants;
 import frc.robot.util.LoggedTunableNumber;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.DoubleSupplier;
 
 public class AutoRoutines {
   // How long to feed the indexer when shooting in auto (smaller hopper = shorter shoot)
   private static final LoggedTunableNumber shootDurationSecs =
       new LoggedTunableNumber("Auto/ShootDurationSecs", 10.0);
 
-  // 0 = shoot in place, 1 = creep toward Points start while shooting (tunable from dashboard)
-  private static final LoggedTunableNumber trenchShootOnMove =
-      new LoggedTunableNumber("Auto/TrenchShootOnMove", 0.0);
-  private static final LoggedTunableNumber trenchCreepSpeedMps =
-      new LoggedTunableNumber("Auto/TrenchCreepSpeedMps", 0.75);
+  // Max speed (m/s) while PIDing to the staging pose during the shoot sequence.
+  private static final LoggedTunableNumber trenchStagingSpeedMps =
+      new LoggedTunableNumber("Auto/TrenchStagingSpeedMps", 0.5);
+
+  // Staging poses the robot PID drives toward while shooting, positioning it at the trench
+  // entrance before the next collection pass. Outpost = bottom wall (low Y), Depot = top wall.
+  private static final LoggedTunableNumber trenchOutpostStagingX =
+      new LoggedTunableNumber("Auto/TrenchOutpostStagingX", 3.0);
+  private static final LoggedTunableNumber trenchOutpostStagingY =
+      new LoggedTunableNumber("Auto/TrenchOutpostStagingY", 0.66);
+  private static final LoggedTunableNumber trenchDepotStagingX =
+      new LoggedTunableNumber("Auto/TrenchDepotStagingX", 3.0);
+  private static final LoggedTunableNumber trenchDepotStagingY =
+      new LoggedTunableNumber("Auto/TrenchDepotStagingY", 7.55);
 
   private final AutoFactory factory;
   private final Drive drive;
@@ -245,7 +256,10 @@ public class AutoRoutines {
     return buildTrenchDisrupt(
         "Trench Outpost Disrupt",
         routine -> routine.trajectory("TrenchOutpostDisrupt"),
-        routine -> routine.trajectory("TrenchOutpostPoints"));
+        routine -> routine.trajectory("TrenchOutpostPoints"),
+        routine -> routine.trajectory("OutpostStagingGather"),
+        trenchOutpostStagingX::get,
+        trenchOutpostStagingY::get);
   }
 
   /** Trench Depot Disrupt: Mirrors outpost disrupt to the depot side via mirrorY(). */
@@ -253,7 +267,10 @@ public class AutoRoutines {
     return buildTrenchDisrupt(
         "Trench Depot Disrupt",
         routine -> routine.trajectory("TrenchOutpostDisrupt").mirrorY(),
-        routine -> routine.trajectory("TrenchOutpostPoints").mirrorY());
+        routine -> routine.trajectory("TrenchOutpostPoints").mirrorY(),
+        routine -> routine.trajectory("OutpostStagingGather").mirrorY(),
+        trenchDepotStagingX::get,
+        trenchDepotStagingY::get);
   }
 
   /**
@@ -263,13 +280,21 @@ public class AutoRoutines {
    */
   public AutoRoutine trenchOutpostPoints() {
     return buildTrenchPoints(
-        "Trench Outpost Points", routine -> routine.trajectory("TrenchOutpostPoints"));
+        "Trench Outpost Points",
+        routine -> routine.trajectory("TrenchOutpostPoints"),
+        routine -> routine.trajectory("OutpostStagingGather"),
+        trenchOutpostStagingX::get,
+        trenchOutpostStagingY::get);
   }
 
   /** Trench Depot Points: Mirrors outpost points to the depot side via mirrorY(). */
   public AutoRoutine trenchDepotPoints() {
     return buildTrenchPoints(
-        "Trench Depot Points", routine -> routine.trajectory("TrenchOutpostPoints").mirrorY());
+        "Trench Depot Points",
+        routine -> routine.trajectory("TrenchOutpostPoints").mirrorY(),
+        routine -> routine.trajectory("OutpostStagingGather").mirrorY(),
+        trenchDepotStagingX::get,
+        trenchDepotStagingY::get);
   }
 
   /**
@@ -280,10 +305,14 @@ public class AutoRoutines {
   private AutoRoutine buildTrenchDisrupt(
       String name,
       java.util.function.Function<AutoRoutine, AutoTrajectory> disruptFactory,
-      java.util.function.Function<AutoRoutine, AutoTrajectory> pointsFactory) {
+      java.util.function.Function<AutoRoutine, AutoTrajectory> pointsFactory,
+      java.util.function.Function<AutoRoutine, AutoTrajectory> gatherFactory,
+      DoubleSupplier stagingX,
+      DoubleSupplier stagingY) {
     AutoRoutine routine = factory.newRoutine(name);
     AutoTrajectory disruptTraj = disruptFactory.apply(routine);
     AutoTrajectory pointsTraj = pointsFactory.apply(routine);
+    AutoTrajectory gatherTraj = gatherFactory.apply(routine);
 
     // Deploy intake at the "Intake" waypoint on the disrupt trajectory
     disruptTraj.atTime("Intake").onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
@@ -302,24 +331,28 @@ public class AutoRoutines {
                 // Retract intake for shooting
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
 
-                // Aim and shoot — stationary or creeping toward Points start
-                trenchShootSequence(pointsTraj.getInitialPose().orElse(new Pose2d())),
+                // Aim at hub and shoot while PIDing toward staging pose near the wall
+                trenchShootSequence(stagingX, stagingY),
 
-                // Repeat: run Points trajectory, shoot, loop until auto ends
-                trenchPointsCycle(pointsTraj)));
+                // Gather: run OutpostStagingGather, deploying intake at its "Intake" marker
+                trenchGatherRun(gatherTraj)));
 
     return routine;
   }
 
   /**
    * Builds a trench points auto. Deploys intake immediately, runs the points trajectory (shooter
-   * spinup at "Spin" waypoint), then aims and shoots, then repeats Points trajectory cycles until
-   * auto ends.
+   * spinup at "Spin" waypoint), then aims and shoots, then gathers until auto ends.
    */
   private AutoRoutine buildTrenchPoints(
-      String name, java.util.function.Function<AutoRoutine, AutoTrajectory> pointsFactory) {
+      String name,
+      java.util.function.Function<AutoRoutine, AutoTrajectory> pointsFactory,
+      java.util.function.Function<AutoRoutine, AutoTrajectory> gatherFactory,
+      DoubleSupplier stagingX,
+      DoubleSupplier stagingY) {
     AutoRoutine routine = factory.newRoutine(name);
     AutoTrajectory pointsTraj = pointsFactory.apply(routine);
+    AutoTrajectory gatherTraj = gatherFactory.apply(routine);
 
     // Spin up shooter at the "Spin" waypoint (before crossing bump)
     pointsTraj.atTime("Spin").onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)));
@@ -339,34 +372,27 @@ public class AutoRoutines {
                 // Retract intake for shooting
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
 
-                // Aim and shoot — stationary or creeping toward Points start
-                trenchShootSequence(pointsTraj.getInitialPose().orElse(new Pose2d())),
+                // Aim at hub and shoot while PIDing toward staging pose near the wall
+                trenchShootSequence(stagingX, stagingY),
 
-                // Repeat: run Points trajectory, shoot, loop until auto ends
-                trenchPointsCycle(pointsTraj)));
+                // Gather: run OutpostStagingGather, deploying intake at its "Intake" marker
+                trenchGatherRun(gatherTraj)));
 
     return routine;
   }
 
-  /**
-   * Repeating cycle: deploy intake, run Points trajectory, retract, shoot. Loops until auto ends
-   * (command is interrupted by the scheduler when autonomous period expires).
-   */
-  private Command trenchPointsCycle(AutoTrajectory pointsTraj) {
-    return Commands.sequence(
-            Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
-            pointsTraj.cmd(),
-            Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
-            trenchShootSequence(pointsTraj.getInitialPose().orElse(new Pose2d())))
-        .repeatedly();
+  /** Runs the gather trajectory once. Intake deploys at its "Intake" waypoint marker. */
+  private Command trenchGatherRun(AutoTrajectory gatherTraj) {
+    gatherTraj.atTime("Intake").onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
+    return gatherTraj.cmd();
   }
 
   /**
-   * Aims at hub and feeds. When Auto/TrenchShootOnMove is 0, shoots in place. When 1, slowly creeps
-   * toward {@code nextPose} while shooting at Auto/TrenchCreepSpeedMps. Switchable from the
-   * dashboard without redeploying.
+   * Aims the back of the robot at the hub and feeds. Simultaneously PID drives toward the tunable
+   * staging pose (Auto/TrenchStagingX/Y/Deg) near the side wall so the robot arrives at the trench
+   * entrance by the time shooting finishes. Heading and translation are decoupled.
    */
-  private Command trenchShootSequence(Pose2d nextPose) {
+  private Command trenchShootSequence(DoubleSupplier stagingX, DoubleSupplier stagingY) {
     ProfiledPIDController headingController =
         new ProfiledPIDController(5.0, 0, 0.4, new TrapezoidProfile.Constraints(8.0, 20.0));
     headingController.enableContinuousInput(-Math.PI, Math.PI);
@@ -391,18 +417,22 @@ public class AutoRoutines {
                       headingController.calculate(
                           current.getRotation().getRadians(), targetHeading);
 
-                  // Translation: stationary or creep toward next pose
+                  // Translation: proportional drive toward staging pose near the wall.
+                  // Flip for red alliance using the same transform Choreo applies to trajectories.
+                  Translation2d staging =
+                      new Translation2d(stagingX.getAsDouble(), stagingY.getAsDouble());
+                  if (ChoreoAllianceFlipUtil.shouldFlip()) {
+                    staging = ChoreoAllianceFlipUtil.flip(staging);
+                  }
+                  Translation2d toStaging = staging.minus(current.getTranslation());
+                  double distance = toStaging.getNorm();
                   double vx = 0;
                   double vy = 0;
-                  if (trenchShootOnMove.get() > 0.5) {
-                    Translation2d toNext =
-                        nextPose.getTranslation().minus(current.getTranslation());
-                    if (toNext.getNorm() > 0.2) {
-                      double angle = Math.atan2(toNext.getY(), toNext.getX());
-                      double speed = trenchCreepSpeedMps.get();
-                      vx = Math.cos(angle) * speed;
-                      vy = Math.sin(angle) * speed;
-                    }
+                  if (distance > 0.15) {
+                    double angle = Math.atan2(toStaging.getY(), toStaging.getX());
+                    double speed = Math.min(trenchStagingSpeedMps.get(), distance * 2.0);
+                    vx = Math.cos(angle) * speed;
+                    vy = Math.sin(angle) * speed;
                   }
 
                   drive.runVelocity(
@@ -413,10 +443,9 @@ public class AutoRoutines {
 
     return Commands.deadline(
         Commands.sequence(
-            Commands.waitUntil(() -> shooter.isAtSetpoint()),
+            Commands.waitUntil(() -> shooter.isAtSetpoint()).withTimeout(2.0),
             Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-            Commands.defer(
-                () -> Commands.waitSeconds(shootDurationSecs.get()), Set.of()),
+            Commands.defer(() -> Commands.waitSeconds(shootDurationSecs.get()), Set.of()),
             Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.IDLE))),
         aimAndDrive,
         intake.periodicAutoRehomeCommand());
@@ -627,6 +656,14 @@ public class AutoRoutines {
 
   /** Sprint to a target pose at high speed with heading control. */
   private Command sprintToPose(Pose2d target) {
+    return sprintToPose(target, 0.3);
+  }
+
+  /**
+   * Sprint to a target pose. Exits when within {@code exitDistanceMeters} of the target, allowing a
+   * larger value to hand off to a trajectory while still at speed.
+   */
+  private Command sprintToPose(Pose2d target, double exitDistanceMeters) {
     ProfiledPIDController headingController =
         new ProfiledPIDController(5.0, 0, 0.4, new TrapezoidProfile.Constraints(8.0, 20.0));
     headingController.enableContinuousInput(-Math.PI, Math.PI);
@@ -655,7 +692,10 @@ public class AutoRoutines {
             },
             drive)
         .beforeStarting(() -> headingController.reset(drive.getRotation().getRadians()))
-        .until(() -> drive.getPose().getTranslation().getDistance(target.getTranslation()) < 0.3);
+        .until(
+            () ->
+                drive.getPose().getTranslation().getDistance(target.getTranslation())
+                    < exitDistanceMeters);
   }
 
   /**
