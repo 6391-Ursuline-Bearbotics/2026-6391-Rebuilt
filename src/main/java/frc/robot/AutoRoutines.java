@@ -20,11 +20,12 @@ import frc.robot.subsystems.shooter.Shooter;
 import frc.robot.subsystems.shooter.ShooterConstants;
 import frc.robot.util.LoggedTunableNumber;
 import java.util.Optional;
+import java.util.Set;
 
 public class AutoRoutines {
   // How long to feed the indexer when shooting in auto (smaller hopper = shorter shoot)
   private static final LoggedTunableNumber shootDurationSecs =
-      new LoggedTunableNumber("Auto/ShootDurationSecs", 5.0);
+      new LoggedTunableNumber("Auto/ShootDurationSecs", 10.0);
 
   // 0 = shoot in place, 1 = creep toward Points start while shooting (tunable from dashboard)
   private static final LoggedTunableNumber trenchShootOnMove =
@@ -414,7 +415,8 @@ public class AutoRoutines {
         Commands.sequence(
             Commands.waitUntil(() -> shooter.isAtSetpoint()),
             Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-            Commands.waitSeconds(shootDurationSecs.get()),
+            Commands.defer(
+                () -> Commands.waitSeconds(shootDurationSecs.get()), Set.of()),
             Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.IDLE))),
         aimAndDrive,
         intake.periodicAutoRehomeCommand());
@@ -511,7 +513,8 @@ public class AutoRoutines {
                                 })
                             .withTimeout(1.5),
                         Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                        Commands.waitSeconds(shootDurationSecs.get()),
+                        Commands.defer(
+                            () -> Commands.waitSeconds(shootDurationSecs.get()), Set.of()),
                         Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.IDLE))),
                     aimBackAtHub(),
                     intake.periodicAutoRehomeCommand()),
@@ -553,7 +556,8 @@ public class AutoRoutines {
                                         })
                                     .withTimeout(1.5),
                                 Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                                Commands.waitSeconds(shootDurationSecs.get()),
+                                Commands.defer(
+                                    () -> Commands.waitSeconds(shootDurationSecs.get()), Set.of()),
                                 Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.IDLE))),
                             aimBackAtHub()))
                     .repeatedly()));
