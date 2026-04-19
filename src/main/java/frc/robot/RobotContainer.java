@@ -237,6 +237,22 @@ public class RobotContainer {
     SmartDashboard.putData("Auto Choices", autoChooser);
 
     // Competition auto routines (always available)
+    // Simple / fallback
+    autoChooser.addRoutine("Shoot Only", autoRoutines::shootOnly);
+    autoChooser.addRoutine("Safe", autoRoutines::safe);
+    autoChooser.addRoutine("Safe (Shoot First)", autoRoutines::safeShootFirst);
+    // Outpost
+    autoChooser.addRoutine("Outpost Double Pass", autoRoutines::outpostDoublePass);
+    autoChooser.addRoutine(
+        "Outpost Double Pass (Shoot First)", autoRoutines::outpostDoublePassShootFirst);
+    autoChooser.addRoutine("Outpost Single Pass", autoRoutines::outpostSinglePass);
+    autoChooser.addRoutine(
+        "Outpost Single Pass (Shoot First)", autoRoutines::outpostSinglePassShootFirst);
+    autoChooser.addRoutine("Outpost FULL Pass", autoRoutines::outpostFullPass);
+    autoChooser.addRoutine("Trench Outpost Disrupt", autoRoutines::trenchOutpostDisrupt);
+    autoChooser.addRoutine("Trench Outpost Points", autoRoutines::trenchOutpostPoints);
+    autoChooser.addRoutine("Trench Outpost Follow", autoRoutines::trenchOutpostFollow);
+    // Depot
     autoChooser.addRoutine("Depot Double Pass", autoRoutines::depotDoublePass);
     autoChooser.addRoutine(
         "Depot Double Pass (Shoot First)", autoRoutines::depotDoublePassShootFirst);
@@ -245,20 +261,9 @@ public class RobotContainer {
         "Depot Single Pass (Shoot First)", autoRoutines::depotSinglePassShootFirst);
     autoChooser.addRoutine(
         "Depot Single Pass Shoot On Move", autoRoutines::depotSinglePassShootOnMove);
-    autoChooser.addRoutine("Outpost Double Pass", autoRoutines::outpostDoublePass);
-    autoChooser.addRoutine(
-        "Outpost Double Pass (Shoot First)", autoRoutines::outpostDoublePassShootFirst);
-    autoChooser.addRoutine("Outpost FULL Pass", autoRoutines::outpostFullPass);
-    autoChooser.addRoutine("Outpost Single Pass", autoRoutines::outpostSinglePass);
-    autoChooser.addRoutine(
-        "Outpost Single Pass (Shoot First)", autoRoutines::outpostSinglePassShootFirst);
-    autoChooser.addRoutine("Trench Outpost Disrupt", autoRoutines::trenchOutpostDisrupt);
-    autoChooser.addRoutine("Trench Outpost Points", autoRoutines::trenchOutpostPoints);
     autoChooser.addRoutine("Trench Depot Disrupt", autoRoutines::trenchDepotDisrupt);
     autoChooser.addRoutine("Trench Depot Points", autoRoutines::trenchDepotPoints);
-    autoChooser.addRoutine("Safe", autoRoutines::safe);
-    autoChooser.addRoutine("Safe (Shoot First)", autoRoutines::safeShootFirst);
-    autoChooser.addRoutine("Shoot Only", autoRoutines::shootOnly);
+    autoChooser.addRoutine("Trench Depot Follow", autoRoutines::trenchDepotFollow);
 
     // Test and characterization routines (tuning mode only)
     if (Constants.tuningMode) {

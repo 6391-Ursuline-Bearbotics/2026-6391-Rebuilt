@@ -44,6 +44,10 @@ public class AutoRoutines {
   private static final LoggedTunableNumber trenchDepotStagingY =
       new LoggedTunableNumber("Auto/TrenchDepotStagingY", 7.55);
 
+  // Extra delay after shoot-first preload shot before starting the trajectory.
+  private static final LoggedTunableNumber shootFirstPostDelaySecs =
+      new LoggedTunableNumber("Auto/ShootFirstPostDelaySecs", 0.0);
+
   private final AutoFactory factory;
   private final Drive drive;
   private final Intake intake;
@@ -298,6 +302,29 @@ public class AutoRoutines {
   }
 
   /**
+   * Trench Outpost Follow: Shoots the preloaded ball first, then follows TrenchOutpostFollow
+   * (intake at "Intake", shooter spinup at "Spin"), aims and shoots while staging, then gathers.
+   */
+  public AutoRoutine trenchOutpostFollow() {
+    return buildTrenchFollow(
+        "Trench Outpost Follow",
+        routine -> routine.trajectory("TrenchOutpostFollow"),
+        routine -> routine.trajectory("OutpostStagingGather"),
+        trenchOutpostStagingX::get,
+        trenchOutpostStagingY::get);
+  }
+
+  /** Trench Depot Follow: Mirrors outpost follow to the depot side via mirrorY(). */
+  public AutoRoutine trenchDepotFollow() {
+    return buildTrenchFollow(
+        "Trench Depot Follow",
+        routine -> routine.trajectory("TrenchOutpostFollow").mirrorY(),
+        routine -> routine.trajectory("OutpostStagingGather").mirrorY(),
+        trenchDepotStagingX::get,
+        trenchDepotStagingY::get);
+  }
+
+  /**
    * Builds a trench disrupt auto. Runs the disrupt trajectory (intake at "Intake" waypoint, shooter
    * spinup at "Spin" waypoint), then aims and shoots, then repeats Points trajectory cycles until
    * auto ends.
@@ -327,6 +354,57 @@ public class AutoRoutines {
 
                 // Rush out; intake and shooter activate via waypoint events
                 disruptTraj.cmd(),
+
+                // Retract intake for shooting
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
+
+                // Aim at hub and shoot while PIDing toward staging pose near the wall
+                trenchShootSequence(stagingX, stagingY),
+
+                // Gather: run OutpostStagingGather, deploying intake at its "Intake" marker
+                trenchGatherRun(gatherTraj)));
+
+    return routine;
+  }
+
+  /**
+   * Builds a trench follow auto. Shoots preloaded ball first, then runs the follow trajectory
+   * (intake at "Intake", shooter spinup at "Spin"), then aims and shoots while staging, then
+   * gathers.
+   */
+  private AutoRoutine buildTrenchFollow(
+      String name,
+      java.util.function.Function<AutoRoutine, AutoTrajectory> followFactory,
+      java.util.function.Function<AutoRoutine, AutoTrajectory> gatherFactory,
+      DoubleSupplier stagingX,
+      DoubleSupplier stagingY) {
+    AutoRoutine routine = factory.newRoutine(name);
+    AutoTrajectory followTraj = followFactory.apply(routine);
+    AutoTrajectory gatherTraj = gatherFactory.apply(routine);
+
+    followTraj.atTime("Intake").onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
+    followTraj.atTime("Spin").onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)));
+
+    routine
+        .active()
+        .onTrue(
+            Commands.sequence(
+                followTraj.resetOdometry(),
+
+                // Shoot preloaded ball before driving out
+                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+                aimBackAtHub().withTimeout(1.5),
+                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                Commands.waitSeconds(1.0),
+                Commands.runOnce(
+                    () -> {
+                      indexer.setGoal(Indexer.Goal.IDLE);
+                      shooter.setGoal(Shooter.Goal.IDLE);
+                    }),
+                Commands.defer(() -> Commands.waitSeconds(shootFirstPostDelaySecs.get()), Set.of()),
+
+                // Follow trajectory; intake and shooter activate via waypoint events
+                followTraj.cmd(),
 
                 // Retract intake for shooting
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
@@ -479,7 +557,8 @@ public class AutoRoutines {
                     () -> {
                       indexer.setGoal(Indexer.Goal.IDLE);
                       shooter.setGoal(Shooter.Goal.IDLE);
-                    }))
+                    }),
+                Commands.defer(() -> Commands.waitSeconds(shootFirstPostDelaySecs.get()), Set.of()))
             : Commands.none();
 
     routine
@@ -614,7 +693,8 @@ public class AutoRoutines {
                     () -> {
                       indexer.setGoal(Indexer.Goal.IDLE);
                       shooter.setGoal(Shooter.Goal.IDLE);
-                    }))
+                    }),
+                Commands.defer(() -> Commands.waitSeconds(shootFirstPostDelaySecs.get()), Set.of()))
             : Commands.none();
 
     // Spin up shooter on the "Shoot" event marker during trajectory
