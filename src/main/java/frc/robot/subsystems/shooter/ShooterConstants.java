@@ -36,7 +36,7 @@ public final class ShooterConstants {
    * values rotate the aim clockwise (when viewed from above). Tune this if shots consistently miss
    * to one side.
    */
-  public static final double shooterHeadingOffsetDegrees = 5.0;
+  public static final double shooterHeadingOffsetDegrees = 4.0;
 
   // Hood servos (PWM ports - placeholder, update when wired)
   public static final int hoodLeftServoPWM = 0;
