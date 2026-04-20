@@ -48,6 +48,13 @@ public class AutoRoutines {
   private static final LoggedTunableNumber shootFirstPostDelaySecs =
       new LoggedTunableNumber("Auto/ShootFirstPostDelaySecs", 0.0);
 
+  // Gather clump detection: roller stator amps above this threshold triggers slow-down.
+  private static final LoggedTunableNumber gatherClumpCurrentAmps =
+      new LoggedTunableNumber("Auto/GatherClumpCurrentAmps", 25.0);
+  // Speed cap (m/s) applied when a clump is detected during a gather pass.
+  private static final LoggedTunableNumber gatherSlowSpeedMps =
+      new LoggedTunableNumber("Auto/GatherSlowSpeedMps", 1.2);
+
   private final AutoFactory factory;
   private final Drive drive;
   private final Intake intake;
@@ -459,10 +466,25 @@ public class AutoRoutines {
     return routine;
   }
 
-  /** Runs the gather trajectory once. Intake deploys at its "Intake" waypoint marker. */
+  /**
+   * Runs the gather trajectory once. Intake deploys at its "Intake" waypoint marker. Reactively
+   * caps drive speed to Auto/GatherSlowSpeedMps when roller current exceeds
+   * Auto/GatherClumpCurrentAmps, allowing the robot to push through dense ball packs without
+   * shoving them away.
+   */
   private Command trenchGatherRun(AutoTrajectory gatherTraj) {
     gatherTraj.atTime("Intake").onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
-    return gatherTraj.cmd();
+    return Commands.deadline(
+            gatherTraj.cmd(),
+            Commands.run(
+                () -> {
+                  if (intake.getRollerStatorCurrentAmps() > gatherClumpCurrentAmps.get()) {
+                    drive.setTrajectorySpeedCap(gatherSlowSpeedMps.get());
+                  } else {
+                    drive.clearTrajectorySpeedCap();
+                  }
+                }))
+        .finallyDo(interrupted -> drive.clearTrajectorySpeedCap());
   }
 
   /**
@@ -479,16 +501,14 @@ public class AutoRoutines {
         Commands.run(
                 () -> {
                   Pose2d current = drive.getPose();
-                  boolean isRed =
-                      DriverStation.getAlliance().isPresent()
-                          && DriverStation.getAlliance().get() == Alliance.Red;
 
-                  // Heading: back of robot aimed at hub
-                  Translation2d hubCenter = FieldConstants.getHubCenter(isRed);
-                  Translation2d toHub = hubCenter.minus(current.getTranslation());
-                  double angleToHub = Math.atan2(toHub.getY(), toHub.getX());
+                  // Heading: back of robot aimed at compensated virtual target (accounts for
+                  // robot velocity so lateral drift during motion is corrected).
+                  Translation2d aimTarget = shooter.getAimTarget();
+                  Translation2d toTarget = aimTarget.minus(current.getTranslation());
+                  double angleToTarget = Math.atan2(toTarget.getY(), toTarget.getX());
                   double targetHeading =
-                      angleToHub
+                      angleToTarget
                           + Math.PI
                           + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
                   double omega =

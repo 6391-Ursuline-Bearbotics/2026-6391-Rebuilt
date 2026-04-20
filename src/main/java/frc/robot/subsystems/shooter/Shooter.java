@@ -174,6 +174,11 @@ public class Shooter extends SubsystemBase {
     return distanceToTarget;
   }
 
+  /** Returns the current aim target (virtual target after shoot-on-the-move compensation). */
+  public Translation2d getAimTarget() {
+    return aimTarget;
+  }
+
   /** Sets the manual distance setpoint in meters. */
   public void setDistanceSetpoint(double meters) {
     distanceSetpointMeters = Math.max(0.5, meters);
