@@ -294,6 +294,19 @@ public class Drive extends SubsystemBase {
                 + headingController.calculate(pose.getRotation().getRadians(), sample.heading),
             pose.getRotation());
 
+    // Apply gather clump speed cap if active: scale down translation, preserve heading correction
+    if (trajectorySpeedCapMps > 0.0) {
+      double linearSpeed = Math.hypot(speeds.vxMetersPerSecond, speeds.vyMetersPerSecond);
+      if (linearSpeed > trajectorySpeedCapMps) {
+        double scale = trajectorySpeedCapMps / linearSpeed;
+        speeds =
+            new ChassisSpeeds(
+                speeds.vxMetersPerSecond * scale,
+                speeds.vyMetersPerSecond * scale,
+                speeds.omegaRadiansPerSecond);
+      }
+    }
+
     // Log trajectory setpoint
     Logger.recordOutput("Odometry/TrajectorySetpoint", sample.getPose());
 
@@ -424,6 +437,9 @@ public class Drive extends SubsystemBase {
   // Optional speed cap (0 = no override)
   private double maxSpeedOverrideMetersPerSec = 0.0;
 
+  // Cap applied to translational speed during trajectory following (0 = no cap)
+  private double trajectorySpeedCapMps = 0.0;
+
   /** Sets a maximum speed override in meters per sec. */
   public void setMaxSpeedOverride(double maxSpeedMetersPerSec) {
     this.maxSpeedOverrideMetersPerSec = maxSpeedMetersPerSec;
@@ -432,6 +448,18 @@ public class Drive extends SubsystemBase {
   /** Clears the maximum speed override. */
   public void clearMaxSpeedOverride() {
     this.maxSpeedOverrideMetersPerSec = 0.0;
+  }
+
+  /**
+   * Caps translational speed during trajectory following. Call clearTrajectorySpeedCap() to remove.
+   */
+  public void setTrajectorySpeedCap(double mps) {
+    trajectorySpeedCapMps = mps;
+  }
+
+  /** Removes the trajectory speed cap. */
+  public void clearTrajectorySpeedCap() {
+    trajectorySpeedCapMps = 0.0;
   }
 
   /** Returns the maximum linear speed in meters per sec. */

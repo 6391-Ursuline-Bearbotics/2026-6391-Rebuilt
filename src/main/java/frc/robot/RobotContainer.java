@@ -9,8 +9,10 @@ package frc.robot;
 
 import static frc.robot.subsystems.vision.VisionConstants.*;
 
+import choreo.Choreo;
 import choreo.auto.AutoChooser;
 import choreo.auto.AutoFactory;
+import choreo.trajectory.SwerveSample;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.geometry.Pose2d;
@@ -20,11 +22,13 @@ import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.math.util.Units;
+import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj.GenericHID;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.XboxController;
+import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
@@ -69,6 +73,8 @@ import frc.robot.subsystems.vision.VisionIO;
 import frc.robot.subsystems.vision.VisionIOLimelight;
 import frc.robot.subsystems.vision.VisionIOPhotonVisionSim;
 import frc.robot.util.LoggedTunableNumber;
+import java.util.ArrayList;
+import java.util.List;
 import org.littletonrobotics.junction.Logger;
 
 /**
@@ -104,6 +110,8 @@ public class RobotContainer {
   private final AutoFactory autoFactory;
   private final AutoRoutines autoRoutines;
   private final AutoChooser autoChooser;
+  private final Field2d autoPreviewField = new Field2d();
+  private String lastPreviewName = "";
 
   // Current drive mode
   private DriveMode currentDriveMode = DriveMode.STANDARD;
@@ -235,6 +243,7 @@ public class RobotContainer {
     autoRoutines = new AutoRoutines(autoFactory, drive, intake, indexer, shooter);
     autoChooser = new AutoChooser();
     SmartDashboard.putData("Auto Choices", autoChooser);
+    SmartDashboard.putData("Auto Preview", autoPreviewField);
 
     // Competition auto routines (always available)
     // Simple / fallback
@@ -815,5 +824,86 @@ public class RobotContainer {
   /** Returns the name of the currently selected autonomous routine for logging. */
   public String getSelectedAutoName() {
     return autoChooser.selectedCommand().getName();
+  }
+
+  /**
+   * Called from Robot.robotPeriodic(). Redraws the Auto Preview Field2d whenever the selected auto
+   * name changes — no work is done if the selection hasn't changed since last tick.
+   */
+  public void updateAutoPreview() {
+    // Read the NT "selected" key directly — this is the raw value Elastic writes when the user
+    // changes the chooser, available immediately without waiting for AutoChooser's subscriber
+    // callback. Fall back to "active" (robot-published) for the initial default state.
+    var chooserTable =
+        NetworkTableInstance.getDefault().getTable("SmartDashboard").getSubTable("Auto Choices");
+    String name =
+        chooserTable.getEntry("selected").getString(chooserTable.getEntry("active").getString(""));
+    if (name.isEmpty() || name.equals(lastPreviewName)) return;
+    lastPreviewName = name;
+    autoPreviewField.getObject("path").setPoses(buildPreviewPoses(name));
+  }
+
+  private record TrajEntry(String name, boolean flip) {}
+
+  private static TrajEntry t(String name) {
+    return new TrajEntry(name, false);
+  }
+
+  private static TrajEntry m(String name) {
+    return new TrajEntry(name, true);
+  }
+
+  /** Maps an auto name to an ordered list of trajectory segments that make up its path. */
+  @SuppressWarnings("java:S1479")
+  private List<TrajEntry> buildPreviewEntries(String autoName) {
+    return switch (autoName) {
+      case "Safe", "Safe (Shoot First)" -> List.of(t("Safe"));
+      case "Outpost Double Pass", "Outpost Double Pass (Shoot First)" -> List.of(
+          t("OutpostBump"),
+          t("OutpostDoublePass"),
+          t("OutpostBumpReturn"),
+          t("OutpostStagingGather"));
+      case "Outpost Single Pass", "Outpost Single Pass (Shoot First)" -> List.of(
+          t("OutpostBump"),
+          t("OutpostSinglePass"),
+          t("OutpostBumpReturn"),
+          t("OutpostStagingGather"));
+      case "Outpost FULL Pass" -> List.of(
+          t("OutpostBump"),
+          t("FullOutpostSinglePass"),
+          t("OutpostBumpReturn"),
+          t("OutpostStagingGather"));
+      case "Trench Outpost Disrupt" -> List.of(
+          t("TrenchOutpostDisrupt"), t("TrenchOutpostPoints"), t("OutpostStagingGather"));
+      case "Trench Outpost Points" -> List.of(t("TrenchOutpostPoints"), t("OutpostStagingGather"));
+      case "Trench Outpost Follow" -> List.of(t("TrenchOutpostFollow"), t("OutpostStagingGather"));
+      case "Depot Double Pass", "Depot Double Pass (Shoot First)" -> List.of(
+          t("DepotBump"), t("DepotDoublePass"), t("DepotBumpReturn"), m("OutpostStagingGather"));
+      case "Depot Single Pass",
+          "Depot Single Pass (Shoot First)",
+          "Depot Single Pass Shoot On Move" -> List.of(
+          t("DepotBump"), t("DepotSinglePass"), t("DepotBumpReturn"), m("OutpostStagingGather"));
+      case "Trench Depot Disrupt" -> List.of(
+          m("TrenchOutpostDisrupt"), m("TrenchOutpostPoints"), m("OutpostStagingGather"));
+      case "Trench Depot Points" -> List.of(m("TrenchOutpostPoints"), m("OutpostStagingGather"));
+      case "Trench Depot Follow" -> List.of(m("TrenchOutpostFollow"), m("OutpostStagingGather"));
+      default -> List.of();
+    };
+  }
+
+  /** Loads trajectory files and concatenates their poses into a single array for Field2d. */
+  private Pose2d[] buildPreviewPoses(String autoName) {
+    var poses = new ArrayList<Pose2d>();
+    for (TrajEntry e : buildPreviewEntries(autoName)) {
+      Choreo.<SwerveSample>loadTrajectory(e.name())
+          .ifPresent(
+              traj -> {
+                var samples = e.flip() ? traj.flipped().samples() : traj.samples();
+                for (SwerveSample s : samples) {
+                  poses.add(s.getPose());
+                }
+              });
+    }
+    return poses.toArray(new Pose2d[0]);
   }
 }

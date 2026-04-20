@@ -412,6 +412,11 @@ public class Intake extends SubsystemBase {
     stallTimer.restart();
   }
 
+  @AutoLogOutput(key = "Intake/Roller/StatorCurrentAmps")
+  public double getRollerStatorCurrentAmps() {
+    return rollerInputs.statorCurrentAmps;
+  }
+
   @AutoLogOutput(key = "Intake/Roller/Jammed")
   public boolean isRollerJammed() {
     return rollerJammed;

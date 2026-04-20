@@ -10,8 +10,10 @@ import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
+import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import frc.robot.subsystems.drive.Drive;
@@ -23,6 +25,7 @@ import frc.robot.util.LoggedTunableNumber;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.DoubleSupplier;
+import org.littletonrobotics.junction.Logger;
 
 public class AutoRoutines {
   // How long to feed the indexer when shooting in auto (smaller hopper = shorter shoot)
@@ -51,8 +54,20 @@ public class AutoRoutines {
       new LoggedTunableNumber("Auto/ShootSettleSecs", 0.5);
 
   static {
-    edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.putNumber("Auto/ShootFirstDelaySecs", 2.0);
+    // setDefaultDouble only writes if the entry doesn't already exist, so Elastic values
+    // survive robot restarts (unlike putNumber which always resets).
+    NetworkTableInstance.getDefault()
+        .getTable("SmartDashboard")
+        .getEntry("Auto/ShootFirstDelaySecs")
+        .setDefaultDouble(0.0);
   }
+
+  // Gather clump detection: roller stator amps above this threshold triggers slow-down.
+  private static final LoggedTunableNumber gatherClumpCurrentAmps =
+      new LoggedTunableNumber("Auto/GatherClumpCurrentAmps", 25.0);
+  // Speed cap (m/s) applied when a clump is detected during a gather pass.
+  private static final LoggedTunableNumber gatherSlowSpeedMps =
+      new LoggedTunableNumber("Auto/GatherSlowSpeedMps", 1.2);
 
   private final AutoFactory factory;
   private final Drive drive;
@@ -452,22 +467,9 @@ public class AutoRoutines {
             Commands.sequence(
                 followTraj.resetOdometry(),
 
-                // Shoot preloaded ball before driving out
-                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
-                aimBackAtHub().withTimeout(1.5),
-                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                Commands.waitSeconds(1.0),
-                Commands.runOnce(
-                    () -> {
-                      indexer.setGoal(Indexer.Goal.IDLE);
-                      shooter.setGoal(Shooter.Goal.IDLE);
-                    }),
-                Commands.defer(
-                    () ->
-                        Commands.waitSeconds(
-                            edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getNumber(
-                                "Auto/ShootFirstDelaySecs", 2.0)),
-                    Set.of()),
+                // Shoot preloaded ball before driving out; delay runs in parallel so it doesn't
+                // add time if the shot itself takes longer.
+                shootFirstPreloadCommand(),
 
                 // Follow trajectory; intake and shooter activate via waypoint events
                 followTraj.cmd(),
@@ -529,10 +531,25 @@ public class AutoRoutines {
     return routine;
   }
 
-  /** Runs the gather trajectory once. Intake deploys at its "Intake" waypoint marker. */
+  /**
+   * Runs the gather trajectory once. Intake deploys at its "Intake" waypoint marker. Reactively
+   * caps drive speed to Auto/GatherSlowSpeedMps when roller current exceeds
+   * Auto/GatherClumpCurrentAmps, allowing the robot to push through dense ball packs without
+   * shoving them away.
+   */
   private Command trenchGatherRun(AutoTrajectory gatherTraj) {
     gatherTraj.atTime("Intake").onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
-    return gatherTraj.cmd();
+    return Commands.deadline(
+            gatherTraj.cmd(),
+            Commands.run(
+                () -> {
+                  if (intake.getRollerStatorCurrentAmps() > gatherClumpCurrentAmps.get()) {
+                    drive.setTrajectorySpeedCap(gatherSlowSpeedMps.get());
+                  } else {
+                    drive.clearTrajectorySpeedCap();
+                  }
+                }))
+        .finallyDo(interrupted -> drive.clearTrajectorySpeedCap());
   }
 
   /**
@@ -549,15 +566,14 @@ public class AutoRoutines {
         Commands.run(
                 () -> {
                   Pose2d current = drive.getPose();
-                  boolean isRed =
-                      DriverStation.getAlliance().isPresent()
-                          && DriverStation.getAlliance().get() == Alliance.Red;
 
-                  // Heading: back of robot aimed at hub
-                  Translation2d toHub =
-                      FieldConstants.getHubCenter(isRed).minus(current.getTranslation());
+                  // Heading: back of robot aimed at compensated virtual target (accounts for
+                  // robot velocity so lateral drift during motion is corrected).
+                  Translation2d aimTarget = shooter.getAimTarget();
+                  Translation2d toTarget = aimTarget.minus(current.getTranslation());
+                  double angleToTarget = Math.atan2(toTarget.getY(), toTarget.getX());
                   double targetHeading =
-                      Math.atan2(toHub.getY(), toHub.getX())
+                      angleToTarget
                           + Math.PI
                           + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
                   double omega =
@@ -619,25 +635,7 @@ public class AutoRoutines {
     AutoTrajectory gatherTraj = gatherFactory.apply(routine);
 
     // Build shoot-first prefix if needed
-    Command shootFirstSequence =
-        shootFirst
-            ? Commands.sequence(
-                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
-                aimBackAtHub().withTimeout(1.5),
-                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                Commands.waitSeconds(1.0),
-                Commands.runOnce(
-                    () -> {
-                      indexer.setGoal(Indexer.Goal.IDLE);
-                      shooter.setGoal(Shooter.Goal.IDLE);
-                    }),
-                Commands.defer(
-                    () ->
-                        Commands.waitSeconds(
-                            edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getNumber(
-                                "Auto/ShootFirstDelaySecs", 2.0)),
-                    Set.of()))
-            : Commands.none();
+    Command shootFirstSequence = shootFirst ? shootFirstPreloadCommand() : Commands.none();
 
     routine
         .active()
@@ -696,25 +694,7 @@ public class AutoRoutines {
     AutoTrajectory safeTraj = routine.trajectory("Safe");
 
     // Build shoot-first prefix if needed
-    Command shootFirstSequence =
-        shootFirst
-            ? Commands.sequence(
-                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
-                aimBackAtHub().withTimeout(1.5),
-                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                Commands.waitSeconds(1.0),
-                Commands.runOnce(
-                    () -> {
-                      indexer.setGoal(Indexer.Goal.IDLE);
-                      shooter.setGoal(Shooter.Goal.IDLE);
-                    }),
-                Commands.defer(
-                    () ->
-                        Commands.waitSeconds(
-                            edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getNumber(
-                                "Auto/ShootFirstDelaySecs", 2.0)),
-                    Set.of()))
-            : Commands.none();
+    Command shootFirstSequence = shootFirst ? shootFirstPreloadCommand() : Commands.none();
 
     // Spin up shooter on the "Shoot" event marker during trajectory
     safeTraj.atTime("Shoot").onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)));
@@ -929,5 +909,36 @@ public class AutoRoutines {
             },
             drive)
         .beforeStarting(() -> headingController.reset(drive.getRotation().getRadians()));
+  }
+
+  /**
+   * Reads Auto/ShootFirstDelaySecs from SmartDashboard and logs the value both to AdvantageKit and
+   * SmartDashboard so it is visible in Elastic at the moment it is consumed.
+   */
+  private double readShootFirstDelaySecs() {
+    double delay = SmartDashboard.getNumber("Auto/ShootFirstDelaySecs", 0.0);
+    Logger.recordOutput("Auto/ShootFirstDelaySecsUsed", delay);
+    SmartDashboard.putNumber("Auto/ShootFirstDelaySecsUsed", delay);
+    return delay;
+  }
+
+  /**
+   * Shoots the preloaded ball and runs the minimum-delay timer in parallel. Proceeds when both are
+   * done — so a delay shorter than the shoot adds no extra time, but a longer delay holds the robot
+   * until it elapses.
+   */
+  private Command shootFirstPreloadCommand() {
+    return Commands.parallel(
+        Commands.sequence(
+            Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+            aimBackAtHub().withTimeout(1.5),
+            Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+            Commands.waitSeconds(1.0),
+            Commands.runOnce(
+                () -> {
+                  indexer.setGoal(Indexer.Goal.IDLE);
+                  shooter.setGoal(Shooter.Goal.IDLE);
+                })),
+        Commands.defer(() -> Commands.waitSeconds(readShootFirstDelaySecs()), Set.of()));
   }
 }
