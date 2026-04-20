@@ -10,8 +10,10 @@ import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
+import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import frc.robot.subsystems.drive.Drive;
@@ -23,6 +25,7 @@ import frc.robot.util.LoggedTunableNumber;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.DoubleSupplier;
+import org.littletonrobotics.junction.Logger;
 
 public class AutoRoutines {
   // How long to feed the indexer when shooting in auto (smaller hopper = shorter shoot)
@@ -51,7 +54,12 @@ public class AutoRoutines {
       new LoggedTunableNumber("Auto/ShootSettleSecs", 0.5);
 
   static {
-    edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.putNumber("Auto/ShootFirstDelaySecs", 2.0);
+    // setDefaultDouble only writes if the entry doesn't already exist, so Elastic values
+    // survive robot restarts (unlike putNumber which always resets).
+    NetworkTableInstance.getDefault()
+        .getTable("SmartDashboard")
+        .getEntry("Auto/ShootFirstDelaySecs")
+        .setDefaultDouble(0.0);
   }
 
   // Gather clump detection: roller stator amps above this threshold triggers slow-down.
@@ -459,22 +467,9 @@ public class AutoRoutines {
             Commands.sequence(
                 followTraj.resetOdometry(),
 
-                // Shoot preloaded ball before driving out
-                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
-                aimBackAtHub().withTimeout(1.5),
-                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                Commands.waitSeconds(1.0),
-                Commands.runOnce(
-                    () -> {
-                      indexer.setGoal(Indexer.Goal.IDLE);
-                      shooter.setGoal(Shooter.Goal.IDLE);
-                    }),
-                Commands.defer(
-                    () ->
-                        Commands.waitSeconds(
-                            edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getNumber(
-                                "Auto/ShootFirstDelaySecs", 2.0)),
-                    Set.of()),
+                // Shoot preloaded ball before driving out; delay runs in parallel so it doesn't
+                // add time if the shot itself takes longer.
+                shootFirstPreloadCommand(),
 
                 // Follow trajectory; intake and shooter activate via waypoint events
                 followTraj.cmd(),
@@ -636,25 +631,7 @@ public class AutoRoutines {
     AutoTrajectory gatherTraj = gatherFactory.apply(routine);
 
     // Build shoot-first prefix if needed
-    Command shootFirstSequence =
-        shootFirst
-            ? Commands.sequence(
-                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
-                aimBackAtHub().withTimeout(1.5),
-                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                Commands.waitSeconds(1.0),
-                Commands.runOnce(
-                    () -> {
-                      indexer.setGoal(Indexer.Goal.IDLE);
-                      shooter.setGoal(Shooter.Goal.IDLE);
-                    }),
-                Commands.defer(
-                    () ->
-                        Commands.waitSeconds(
-                            edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getNumber(
-                                "Auto/ShootFirstDelaySecs", 2.0)),
-                    Set.of()))
-            : Commands.none();
+    Command shootFirstSequence = shootFirst ? shootFirstPreloadCommand() : Commands.none();
 
     routine
         .active()
@@ -713,25 +690,7 @@ public class AutoRoutines {
     AutoTrajectory safeTraj = routine.trajectory("Safe");
 
     // Build shoot-first prefix if needed
-    Command shootFirstSequence =
-        shootFirst
-            ? Commands.sequence(
-                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
-                aimBackAtHub().withTimeout(1.5),
-                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                Commands.waitSeconds(1.0),
-                Commands.runOnce(
-                    () -> {
-                      indexer.setGoal(Indexer.Goal.IDLE);
-                      shooter.setGoal(Shooter.Goal.IDLE);
-                    }),
-                Commands.defer(
-                    () ->
-                        Commands.waitSeconds(
-                            edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.getNumber(
-                                "Auto/ShootFirstDelaySecs", 2.0)),
-                    Set.of()))
-            : Commands.none();
+    Command shootFirstSequence = shootFirst ? shootFirstPreloadCommand() : Commands.none();
 
     // Spin up shooter on the "Shoot" event marker during trajectory
     safeTraj.atTime("Shoot").onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)));
@@ -946,5 +905,36 @@ public class AutoRoutines {
             },
             drive)
         .beforeStarting(() -> headingController.reset(drive.getRotation().getRadians()));
+  }
+
+  /**
+   * Reads Auto/ShootFirstDelaySecs from SmartDashboard and logs the value both to AdvantageKit and
+   * SmartDashboard so it is visible in Elastic at the moment it is consumed.
+   */
+  private double readShootFirstDelaySecs() {
+    double delay = SmartDashboard.getNumber("Auto/ShootFirstDelaySecs", 0.0);
+    Logger.recordOutput("Auto/ShootFirstDelaySecsUsed", delay);
+    SmartDashboard.putNumber("Auto/ShootFirstDelaySecsUsed", delay);
+    return delay;
+  }
+
+  /**
+   * Shoots the preloaded ball and runs the minimum-delay timer in parallel. Proceeds when both are
+   * done — so a delay shorter than the shoot adds no extra time, but a longer delay holds the robot
+   * until it elapses.
+   */
+  private Command shootFirstPreloadCommand() {
+    return Commands.parallel(
+        Commands.sequence(
+            Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+            aimBackAtHub().withTimeout(1.5),
+            Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+            Commands.waitSeconds(1.0),
+            Commands.runOnce(
+                () -> {
+                  indexer.setGoal(Indexer.Goal.IDLE);
+                  shooter.setGoal(Shooter.Goal.IDLE);
+                })),
+        Commands.defer(() -> Commands.waitSeconds(readShootFirstDelaySecs()), Set.of()));
   }
 }
