@@ -389,8 +389,7 @@ public class Shooter extends SubsystemBase {
       boolean isRed =
           DriverStation.getAlliance().isPresent()
               && DriverStation.getAlliance().get() == Alliance.Red;
-      Translation2d toHub =
-          FieldConstants.getHubCenter(isRed).minus(robotPose.getTranslation());
+      Translation2d toHub = FieldConstants.getHubCenter(isRed).minus(robotPose.getTranslation());
       double dist = toHub.getNorm();
       if (dist > 0.01) {
         // Unit vector from robot toward hub

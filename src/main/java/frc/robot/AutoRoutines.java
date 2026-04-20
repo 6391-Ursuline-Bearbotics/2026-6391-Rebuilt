@@ -520,7 +520,11 @@ public class AutoRoutines {
                 trenchShootSequence(stagingX, stagingY),
 
                 // Gather: run OutpostStagingGather, deploying intake at its "Intake" marker
-                trenchGatherRun(gatherTraj)));
+                trenchGatherRun(gatherTraj),
+
+                // Retract intake and shoot gathered balls
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
+                trenchShootSequence(stagingX, stagingY)));
 
     return routine;
   }

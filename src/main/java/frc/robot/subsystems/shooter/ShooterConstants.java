@@ -29,14 +29,14 @@ public final class ShooterConstants {
   public static final double bangBangPeakCurrentAmps = 80.0;
 
   // Shoot-on-the-move
-  public static final int shotCompensationIterations = 3;
+  public static final int shotCompensationIterations = 2;
 
   /**
    * Physical heading offset of the shooter relative to the robot's back axis, in degrees. Positive
    * values rotate the aim clockwise (when viewed from above). Tune this if shots consistently miss
    * to one side.
    */
-  public static final double shooterHeadingOffsetDegrees = 2.0;
+  public static final double shooterHeadingOffsetDegrees = 4.0;
 
   // Hood servos (PWM ports - placeholder, update when wired)
   public static final int hoodLeftServoPWM = 0;
@@ -63,9 +63,10 @@ public final class ShooterConstants {
   public static InterpolatingDoubleTreeMap createDistanceToRPMMap() {
     var map = new InterpolatingDoubleTreeMap();
     map.put(1.8, 2500.0); // 2 is auto starting point
-    map.put(2.5, 2700.0); // 2 is auto starting point
-    map.put(3.0, 2900.0); // ~3 Distance to trench shot
-    map.put(3.5, 3100.0);
+    map.put(2.0, 2600.0);
+    map.put(2.5, 2800.0); // 2 is auto starting point
+    map.put(3.0, 3000.0); // ~3 Distance to trench shot
+    map.put(3.5, 3200.0);
     map.put(4.0, 3250.0); // ~5.5 Distance to corner of alliance zone shot
     map.put(4.5, 3450.0); // ~5.5 Distance to corner of alliance zone shot
     map.put(5.1, 3550.0); // ~5.5 Distance to corner of alliance zone shot
@@ -98,12 +99,11 @@ public final class ShooterConstants {
   public static InterpolatingDoubleTreeMap createDistanceToTOFMap() {
     var map = new InterpolatingDoubleTreeMap();
     // TODO: Replace with real measured data
-    map.put(1.0, 0.25);
-    map.put(2.0, 0.35);
-    map.put(3.0, 0.50);
-    map.put(4.0, 0.65);
-    map.put(5.0, 0.80);
-    map.put(6.0, 0.95);
+    map.put(2.0, 0.85);
+    map.put(3.0, 0.90);
+    map.put(4.0, 0.95);
+    map.put(5.0, 1.0);
+    map.put(6.0, 1.05);
     map.put(7.0, 1.10);
     return map;
   }

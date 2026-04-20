@@ -585,8 +585,7 @@ public class RobotContainer {
             Commands.run(
                 () -> {
                   ChassisSpeeds speeds = drive.getFieldRelativeSpeeds();
-                  double speed =
-                      Math.hypot(speeds.vxMetersPerSecond, speeds.vyMetersPerSecond);
+                  double speed = Math.hypot(speeds.vxMetersPerSecond, speeds.vyMetersPerSecond);
                   if (speed > 0.15) {
                     // Moving: stay in INTAKE and reset the rehome cycle
                     intake.setGoal(Intake.Goal.INTAKE);
