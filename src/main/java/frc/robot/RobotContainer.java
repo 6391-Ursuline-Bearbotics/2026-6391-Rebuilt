@@ -22,6 +22,7 @@ import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.math.util.Units;
+import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj.GenericHID;
@@ -830,8 +831,14 @@ public class RobotContainer {
    * name changes — no work is done if the selection hasn't changed since last tick.
    */
   public void updateAutoPreview() {
-    String name = getSelectedAutoName();
-    if (name.equals(lastPreviewName)) return;
+    // Read the NT "selected" key directly — this is the raw value Elastic writes when the user
+    // changes the chooser, available immediately without waiting for AutoChooser's subscriber
+    // callback. Fall back to "active" (robot-published) for the initial default state.
+    var chooserTable =
+        NetworkTableInstance.getDefault().getTable("SmartDashboard").getSubTable("Auto Choices");
+    String name =
+        chooserTable.getEntry("selected").getString(chooserTable.getEntry("active").getString(""));
+    if (name.isEmpty() || name.equals(lastPreviewName)) return;
     lastPreviewName = name;
     autoPreviewField.getObject("path").setPoses(buildPreviewPoses(name));
   }
