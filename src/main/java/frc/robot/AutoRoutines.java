@@ -437,6 +437,13 @@ public class AutoRoutines {
                 // Aim at hub and shoot while PIDing toward staging pose near the wall
                 trenchShootSequence(stagingX, stagingY),
 
+                // Lower hood to 26° before entering trench for gather pass
+                Commands.runOnce(() -> shooter.setHoodAngle(26.0)),
+                Commands.waitSeconds(0.25),
+
+                // PID to gather path start so second pass is consistent
+                sprintToPose(gatherTraj.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
+
                 // Gather: run OutpostStagingGather, deploying intake at its "Intake" marker
                 trenchGatherRun(gatherTraj)));
 
@@ -480,6 +487,13 @@ public class AutoRoutines {
                 // Aim at hub and shoot while PIDing toward staging pose near the wall
                 trenchShootSequence(stagingX, stagingY),
 
+                // Lower hood to 26° before entering trench for gather pass
+                Commands.runOnce(() -> shooter.setHoodAngle(26.0)),
+                Commands.waitSeconds(0.25),
+
+                // PID to gather path start so second pass is consistent
+                sprintToPose(gatherTraj.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
+
                 // Gather: run OutpostStagingGather, deploying intake at its "Intake" marker
                 trenchGatherRun(gatherTraj)));
 
@@ -521,11 +535,20 @@ public class AutoRoutines {
                 // Aim at hub and shoot while PIDing toward staging pose near the wall
                 trenchShootSequence(stagingX, stagingY),
 
+                // Lower hood to 26° before entering trench for gather pass
+                Commands.runOnce(() -> shooter.setHoodAngle(26.0)),
+                Commands.waitSeconds(0.25),
+
+                // PID to gather path start so second pass is consistent
+                sprintToPose(gatherTraj.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
+
                 // Gather: run OutpostStagingGather, deploying intake at its "Intake" marker
                 trenchGatherRun(gatherTraj),
 
-                // Retract intake and shoot gathered balls
+                // Retract intake, clear hood command, spin up shooter, and shoot gathered balls
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
+                Commands.runOnce(() -> shooter.clearHoodAngle()),
+                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
                 trenchShootSequence(stagingX, stagingY)));
 
     return routine;
@@ -674,12 +697,21 @@ public class AutoRoutines {
                 // Correct positional error introduced by bump crossing
                 sprintToPose(bumpReturn.getFinalPose().orElse(new Pose2d())).withTimeout(2.0),
 
-                // Shoot on the move toward staging pose, then gather
+                // Shoot on the move toward staging pose
                 trenchShootSequence(stagingX, stagingY),
+
+                // Lower hood to 26° before entering trench for gather pass
+                Commands.runOnce(() -> shooter.setHoodAngle(26.0)),
+                Commands.waitSeconds(0.25),
+
+                // Gather
                 trenchGatherRun(gatherTraj),
 
-                // If time remains after gather, retract intake and shoot again
+                // If time remains after gather, retract intake, clear hood command, spin up, and
+                // shoot again
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
+                Commands.runOnce(() -> shooter.clearHoodAngle()),
+                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
                 trenchShootSequence(stagingX, stagingY)));
 
     return routine;

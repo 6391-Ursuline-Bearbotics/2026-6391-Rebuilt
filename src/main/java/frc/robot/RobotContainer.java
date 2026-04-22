@@ -477,8 +477,8 @@ public class RobotContainer {
         .onTrue(
             Commands.runOnce(
                 () -> {
-                  shooter.adjustDistanceSetpoint(Units.feetToMeters(-0.5));
-                  shooter.setGoal(Shooter.Goal.SHOOT);
+                  shooter.setHoodAngle(26.0);
+                  shooter.setGoal(Shooter.Goal.IDLE);
                 }));
 
     // Operator X: Eject (reverse indexer + deploy intake in reverse, restore previous state on

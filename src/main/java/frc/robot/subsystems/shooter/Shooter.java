@@ -106,6 +106,7 @@ public class Shooter extends SubsystemBase {
   private Goal goal = Goal.IDLE;
   private double commandedRPM = 0.0;
   private double commandedAngleDeg = ShooterConstants.hoodMinAngleDeg;
+  private double hoodAngleCommandDeg = 0.0; // 0 = not active
   private double distanceToTarget = 0.0;
   private Translation2d aimTarget = Translation2d.kZero;
 
@@ -152,6 +153,16 @@ public class Shooter extends SubsystemBase {
 
   public void setGoal(Goal goal) {
     this.goal = goal;
+  }
+
+  /** Directly commands the hood to a specific angle, overriding goal-based control. */
+  public void setHoodAngle(double degrees) {
+    hoodAngleCommandDeg = degrees;
+  }
+
+  /** Clears the direct hood angle command, returning control to goal-based logic. */
+  public void clearHoodAngle() {
+    hoodAngleCommandDeg = 0.0;
   }
 
   @AutoLogOutput(key = "Shooter/Goal")
@@ -324,6 +335,11 @@ public class Shooter extends SubsystemBase {
     // Apply hood angle override for servo testing (non-zero value bypasses distance table)
     if (hoodAngleOverride.get() != 0.0) {
       commandedAngleDeg = hoodAngleOverride.get();
+    }
+
+    // Apply direct hood angle command (e.g. from auto routines before trench entry)
+    if (hoodAngleCommandDeg != 0.0) {
+      commandedAngleDeg = hoodAngleCommandDeg;
     }
 
     // Trench approach override — mechanical safety takes priority over all other hood commands
