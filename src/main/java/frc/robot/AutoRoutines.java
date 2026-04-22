@@ -521,10 +521,10 @@ public class AutoRoutines {
         .active()
         .onTrue(
             Commands.sequence(
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
                 pointsTraj.resetOdometry(),
 
                 // Deploy intake right away
-                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
 
                 // Follow Points trajectory; shooter spins up at "Spin" waypoint
                 pointsTraj.cmd(),

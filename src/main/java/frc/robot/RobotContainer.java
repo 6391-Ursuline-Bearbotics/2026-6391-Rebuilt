@@ -371,6 +371,17 @@ public class RobotContainer {
                     drive)
                 .ignoringDisable(true));
 
+    // Driver right bumper: idle shooter and move hood to 26°, waits until hood arrives
+    drv.rightBumper()
+        .onTrue(
+            Commands.sequence(
+                Commands.runOnce(
+                    () -> {
+                      shooter.setGoal(Shooter.Goal.IDLE);
+                      shooter.setHoodAngle(26.0);
+                    }),
+                Commands.waitUntil(() -> shooter.isHoodAtAngle(26.0, 1.0))));
+
     // Operator intake controls
     op.a().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
     op.b().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)));

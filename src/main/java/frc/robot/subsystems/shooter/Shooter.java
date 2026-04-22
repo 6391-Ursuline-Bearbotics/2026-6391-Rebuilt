@@ -153,6 +153,9 @@ public class Shooter extends SubsystemBase {
 
   public void setGoal(Goal goal) {
     this.goal = goal;
+    if (goal == Goal.SHOOT) {
+      hoodAngleCommandDeg = 0.0;
+    }
   }
 
   /** Directly commands the hood to a specific angle, overriding goal-based control. */
@@ -342,8 +345,9 @@ public class Shooter extends SubsystemBase {
       commandedAngleDeg = hoodAngleCommandDeg;
     }
 
-    // Trench approach override — mechanical safety takes priority over all other hood commands
-    if (isApproachingTrench()) {
+    // Trench approach override — lowers hood when driving into a trench.
+    // Skipped when actively shooting so the distance table controls the angle at the staging pose.
+    if (goal != Goal.SHOOT && isApproachingTrench()) {
       commandedAngleDeg = ShooterConstants.hoodMinAngleDeg;
     }
 
@@ -518,6 +522,16 @@ public class Shooter extends SubsystemBase {
   @AutoLogOutput(key = "Shooter/Jammed")
   public boolean isJammed() {
     return jammed;
+  }
+
+  /** Returns the current hood angle in degrees as reported by the servo feedback. */
+  public double getHoodAngleDeg() {
+    return hoodInputs.positionDeg;
+  }
+
+  /** Returns true if the hood is within toleranceDeg of the target angle. */
+  public boolean isHoodAtAngle(double targetDeg, double toleranceDeg) {
+    return Math.abs(hoodInputs.positionDeg - targetDeg) < toleranceDeg;
   }
 
   private void updateAlerts() {
