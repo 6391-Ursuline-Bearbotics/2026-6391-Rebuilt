@@ -282,16 +282,21 @@ public class Drive extends SubsystemBase {
 
   /** Follows a Choreo trajectory sample using feedforward + PID feedback. */
   public void followTrajectory(SwerveSample sample) {
-    // Get current pose for PID feedback
     Pose2d pose = getPose();
+
+    // Compute PID corrections
+    double xCorrection = xController.calculate(pose.getX(), sample.x);
+    double yCorrection = yController.calculate(pose.getY(), sample.y);
+    double headingCorrectionRaw =
+        headingController.calculate(pose.getRotation().getRadians(), sample.heading);
+    double headingCorrectionClamped = MathUtil.clamp(headingCorrectionRaw, -2.0, 2.0);
 
     // Field-relative speeds: feedforward from trajectory + PID feedback
     ChassisSpeeds speeds =
         ChassisSpeeds.fromFieldRelativeSpeeds(
-            sample.vx + xController.calculate(pose.getX(), sample.x),
-            sample.vy + yController.calculate(pose.getY(), sample.y),
-            sample.omega
-                + headingController.calculate(pose.getRotation().getRadians(), sample.heading),
+            sample.vx + xCorrection,
+            sample.vy + yCorrection,
+            sample.omega + headingCorrectionClamped,
             pose.getRotation());
 
     // Apply gather clump speed cap if active: scale down translation, preserve heading correction
@@ -307,8 +312,19 @@ public class Drive extends SubsystemBase {
       }
     }
 
-    // Log trajectory setpoint
+    // Trajectory following telemetry (visible in AdvantageScope under Drive/Trajectory/)
     Logger.recordOutput("Odometry/TrajectorySetpoint", sample.getPose());
+    Logger.recordOutput("Drive/Trajectory/XErrorMeters", sample.x - pose.getX());
+    Logger.recordOutput("Drive/Trajectory/YErrorMeters", sample.y - pose.getY());
+    Logger.recordOutput(
+        "Drive/Trajectory/TranslationErrorMeters",
+        Math.hypot(sample.x - pose.getX(), sample.y - pose.getY()));
+    Logger.recordOutput(
+        "Drive/Trajectory/HeadingErrorDegrees",
+        Math.toDegrees(headingController.getPositionError()));
+    Logger.recordOutput("Drive/Trajectory/HeadingCorrectionRawRadPerSec", headingCorrectionRaw);
+    Logger.recordOutput(
+        "Drive/Trajectory/HeadingCorrectionClampedRadPerSec", headingCorrectionClamped);
 
     runVelocity(speeds);
   }

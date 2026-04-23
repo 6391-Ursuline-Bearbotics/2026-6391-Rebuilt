@@ -4,6 +4,7 @@ import choreo.auto.AutoFactory;
 import choreo.auto.AutoRoutine;
 import choreo.auto.AutoTrajectory;
 import choreo.util.ChoreoAllianceFlipUtil;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
@@ -596,9 +597,10 @@ public class AutoRoutines {
                   Translation2d toTarget = aimTarget.minus(current.getTranslation());
                   double angleToTarget = Math.atan2(toTarget.getY(), toTarget.getX());
                   double targetHeading =
-                      angleToTarget
-                          + Math.PI
-                          + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
+                      MathUtil.angleModulus(
+                          angleToTarget
+                              + Math.PI
+                              + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees));
                   double omega =
                       headingController.calculate(
                           current.getRotation().getRadians(), targetHeading);
