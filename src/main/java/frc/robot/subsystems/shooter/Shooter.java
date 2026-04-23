@@ -23,6 +23,7 @@ import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.littletonrobotics.junction.AutoLogOutput;
 import org.littletonrobotics.junction.Logger;
@@ -97,6 +98,9 @@ public class Shooter extends SubsystemBase {
   private final Supplier<ChassisSpeeds> fieldSpeedsSupplier;
   private final Supplier<Double> pitchSupplier;
 
+  // Returns true while any shot button is physically held on either controller
+  private final BooleanSupplier shotButtonHeldSupplier;
+
   // Interpolation tables
   private final InterpolatingDoubleTreeMap distanceToRPM;
   private final InterpolatingDoubleTreeMap distanceToAngle;
@@ -138,13 +142,15 @@ public class Shooter extends SubsystemBase {
       Supplier<Pose2d> poseSupplier,
       Supplier<ChassisSpeeds> fieldSpeedsSupplier,
       Supplier<Boolean> indexerFeedingSupplier,
-      Supplier<Double> pitchSupplier) {
+      Supplier<Double> pitchSupplier,
+      BooleanSupplier shotButtonHeldSupplier) {
     this.io = io;
     this.hoodIO = hoodIO;
     this.poseSupplier = poseSupplier;
     this.fieldSpeedsSupplier = fieldSpeedsSupplier;
     this.indexerFeedingSupplier = indexerFeedingSupplier;
     this.pitchSupplier = pitchSupplier;
+    this.shotButtonHeldSupplier = shotButtonHeldSupplier;
     this.distanceToRPM = ShooterConstants.createDistanceToRPMMap();
     this.distanceToAngle = ShooterConstants.createDistanceToAngleMap();
     this.distanceToTOF = ShooterConstants.createDistanceToTOFMap();
@@ -345,10 +351,13 @@ public class Shooter extends SubsystemBase {
       commandedAngleDeg = hoodAngleCommandDeg;
     }
 
-    // Trench approach override — lowers hood when driving into a trench.
-    // Skipped when actively shooting so the distance table controls the angle at the staging pose.
-    if (goal != Goal.SHOOT && isApproachingTrench()) {
-      commandedAngleDeg = ShooterConstants.hoodMinAngleDeg;
+    // Trench approach override — lowers hood to 26° when driving into a trench during teleop.
+    // Skipped in autonomous (auto routines manage hood angle explicitly) and while any shot
+    // button is physically held on either controller.
+    if (DriverStation.isTeleop()
+        && !shotButtonHeldSupplier.getAsBoolean()
+        && isApproachingTrench()) {
+      commandedAngleDeg = 26.0;
     }
 
     hoodIO.setAngle(commandedAngleDeg);

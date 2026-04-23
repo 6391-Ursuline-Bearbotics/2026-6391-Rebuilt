@@ -164,14 +164,22 @@ public class RobotContainer {
                     drive::getPose,
                     drive::getFieldRelativeSpeeds,
                     () -> indexer.getGoal() == Indexer.Goal.FEED,
-                    drive::getPitch)
+                    drive::getPitch,
+                    drv.rightTrigger(0.5)
+                        .or(op.rightTrigger(0.5))
+                        .or(op.leftTrigger(0.5))
+                        .or(op.leftBumper()))
                 : new Shooter(
                     new ShooterIO() {},
                     new ShooterHoodIO() {},
                     drive::getPose,
                     drive::getFieldRelativeSpeeds,
                     () -> indexer.getGoal() == Indexer.Goal.FEED,
-                    drive::getPitch);
+                    drive::getPitch,
+                    drv.rightTrigger(0.5)
+                        .or(op.rightTrigger(0.5))
+                        .or(op.leftTrigger(0.5))
+                        .or(op.leftBumper()));
 
         break;
 
@@ -202,7 +210,11 @@ public class RobotContainer {
                 drive::getPose,
                 drive::getFieldRelativeSpeeds,
                 () -> indexer.getGoal() == Indexer.Goal.FEED,
-                drive::getPitch);
+                drive::getPitch,
+                drv.rightTrigger(0.5)
+                    .or(op.rightTrigger(0.5))
+                    .or(op.leftTrigger(0.5))
+                    .or(op.leftBumper()));
         break;
 
       default:
@@ -229,7 +241,8 @@ public class RobotContainer {
                 drive::getPose,
                 drive::getFieldRelativeSpeeds,
                 () -> indexer.getGoal() == Indexer.Goal.FEED,
-                drive::getPitch);
+                drive::getPitch,
+                () -> false);
         break;
     }
 
