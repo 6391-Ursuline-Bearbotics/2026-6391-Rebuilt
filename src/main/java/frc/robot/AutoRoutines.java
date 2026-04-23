@@ -25,6 +25,7 @@ import frc.robot.subsystems.shooter.ShooterConstants;
 import frc.robot.util.LoggedTunableNumber;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.DoubleSupplier;
 import org.littletonrobotics.junction.Logger;
 
@@ -479,6 +480,10 @@ public class AutoRoutines {
                 // add time if the shot itself takes longer.
                 shootFirstPreloadCommand(),
 
+                // Lower hood to 26° before entering trench (first pass)
+                Commands.runOnce(() -> shooter.setHoodAngle(26.0)),
+                Commands.waitSeconds(0.25),
+
                 // Follow trajectory; intake and shooter activate via waypoint events
                 followTraj.cmd(),
 
@@ -581,10 +586,25 @@ public class AutoRoutines {
    * pose. The shooter's shoot-on-the-move compensation (radial + lateral) handles power adjustment
    * for robot velocity.
    */
+  private static final double kTrenchAimToleranceRad = Math.toRadians(4.5);
+
   private Command trenchShootSequence(DoubleSupplier stagingX, DoubleSupplier stagingY) {
     ProfiledPIDController headingController =
         new ProfiledPIDController(5.0, 0, 0.4, new TrapezoidProfile.Constraints(8.0, 20.0));
     headingController.enableContinuousInput(-Math.PI, Math.PI);
+
+    BooleanSupplier isAimed =
+        () -> {
+          Translation2d aimTarget = shooter.getAimTarget();
+          Translation2d toTarget = aimTarget.minus(drive.getPose().getTranslation());
+          double targetHeading =
+              MathUtil.angleModulus(
+                  Math.atan2(toTarget.getY(), toTarget.getX())
+                      + Math.PI
+                      + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees));
+          double error = MathUtil.angleModulus(targetHeading - drive.getRotation().getRadians());
+          return Math.abs(error) < kTrenchAimToleranceRad;
+        };
 
     Command aimAndDrive =
         Commands.run(
@@ -630,7 +650,8 @@ public class AutoRoutines {
 
     return Commands.deadline(
         Commands.sequence(
-            Commands.waitUntil(() -> shooter.isAtSetpoint()).withTimeout(2.0),
+            Commands.waitUntil(() -> shooter.isAtSetpoint() && isAimed.getAsBoolean())
+                .withTimeout(2.0),
             Commands.defer(() -> Commands.waitSeconds(shootSettleSecs.get()), Set.of()),
             Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
             Commands.defer(() -> Commands.waitSeconds(shootDurationSecs.get()), Set.of()),
