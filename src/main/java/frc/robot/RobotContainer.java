@@ -472,7 +472,7 @@ public class RobotContainer {
                       currentDriveMode = DriveMode.STANDARD;
                       autoAimGyrating = false;
                     })
-                .alongWith(intakeWithMotionAdaptiveRehome()));
+                .alongWith(rehomeOnly()));
 
     // DPAD: Manual distance setpoint + spin up shooter
     // Left = 5ft, Right = 10ft, Up = +0.5ft, Down = -0.5ft
@@ -601,9 +601,45 @@ public class RobotContainer {
   }
 
   /**
+   * Returns a command that runs periodic brief IDLE rehome pulses when stationary, without changing
+   * the intake goal while moving. For use during gated shots where intake should not be activated.
+   * Speed threshold is 0.15 m/s; rehome fires every 2.0s and lasts 0.75s.
+   */
+  private Command rehomeOnly() {
+    edu.wpi.first.wpilibj.Timer rehomeTimer = new edu.wpi.first.wpilibj.Timer();
+    boolean[] rehoming = {false};
+    return Commands.runOnce(
+            () -> {
+              rehomeTimer.restart();
+              rehoming[0] = false;
+            })
+        .andThen(
+            Commands.run(
+                () -> {
+                  ChassisSpeeds speeds = drive.getFieldRelativeSpeeds();
+                  double speed = Math.hypot(speeds.vxMetersPerSecond, speeds.vyMetersPerSecond);
+                  if (speed > 0.15) {
+                    // Moving: reset rehome cycle, leave intake goal alone
+                    rehoming[0] = false;
+                    rehomeTimer.restart();
+                  } else if (!rehoming[0] && rehomeTimer.hasElapsed(2.0)) {
+                    // Stationary: trigger brief rehome
+                    intake.setGoal(Intake.Goal.IDLE);
+                    rehomeTimer.restart();
+                    rehoming[0] = true;
+                  } else if (rehoming[0] && rehomeTimer.hasElapsed(0.75)) {
+                    // Rehome done: restore INTAKE
+                    intake.setGoal(Intake.Goal.INTAKE);
+                    rehoming[0] = false;
+                    rehomeTimer.restart();
+                  }
+                }));
+  }
+
+  /**
    * Returns a command that keeps the intake in INTAKE while the robot is moving, and runs a
    * periodic brief IDLE rehome cycle when stationary to keep the mechanism seated. Speed threshold
-   * is 0.15 m/s; rehome fires every 1.5s and lasts 0.3s before returning to INTAKE.
+   * is 0.15 m/s; rehome fires every 2.0s and lasts 0.75s before returning to INTAKE.
    */
   private Command intakeWithMotionAdaptiveRehome() {
     edu.wpi.first.wpilibj.Timer rehomeTimer = new edu.wpi.first.wpilibj.Timer();
@@ -624,12 +660,12 @@ public class RobotContainer {
                     intake.setGoal(Intake.Goal.INTAKE);
                     rehoming[0] = false;
                     rehomeTimer.restart();
-                  } else if (!rehoming[0] && rehomeTimer.hasElapsed(1.5)) {
+                  } else if (!rehoming[0] && rehomeTimer.hasElapsed(2.0)) {
                     // Stationary: trigger brief rehome
                     intake.setGoal(Intake.Goal.IDLE);
                     rehomeTimer.restart();
                     rehoming[0] = true;
-                  } else if (rehoming[0] && rehomeTimer.hasElapsed(0.3)) {
+                  } else if (rehoming[0] && rehomeTimer.hasElapsed(0.75)) {
                     // Rehome done: return to INTAKE
                     intake.setGoal(Intake.Goal.INTAKE);
                     rehoming[0] = false;
