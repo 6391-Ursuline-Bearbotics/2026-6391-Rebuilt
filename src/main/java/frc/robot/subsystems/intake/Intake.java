@@ -51,6 +51,13 @@ public class Intake extends SubsystemBase {
   private static final LoggedTunableNumber rehomeDeployTime =
       new LoggedTunableNumber("Intake/Deploy/RehomeDeployTime", 0.5);
 
+  // Light voltage to hold intake retracted against gravity (only applied when drifted from hard
+  // stop)
+  private static final LoggedTunableNumber retractHoldVoltage =
+      new LoggedTunableNumber("Intake/Deploy/RetractHoldVoltage", -0.4);
+  private static final LoggedTunableNumber retractHoldDriftThresholdRad =
+      new LoggedTunableNumber("Intake/Deploy/RetractHoldDriftThresholdRad", 0.05);
+
   // Position hold: resist light forces when deployed, yield to heavy forces
   private static final LoggedTunableNumber positionHoldThresholdRad =
       new LoggedTunableNumber("Intake/Deploy/PositionHoldThresholdRad", 0.15);
@@ -68,8 +75,6 @@ public class Intake extends SubsystemBase {
   private static final LoggedTunableNumber rollerJamDebounceTime =
       new LoggedTunableNumber(
           "Intake/Roller/JamDebounceTime", IntakeConstants.rollerJamDebounceTime);
-  private static final LoggedTunableNumber rollerJamReverseTime =
-      new LoggedTunableNumber("Intake/Roller/JamReverseTime", IntakeConstants.rollerJamReverseTime);
 
   /** Desired intake behavior, set by operator controls. */
   public enum Goal {
@@ -100,6 +105,7 @@ public class Intake extends SubsystemBase {
   private DeployState deployState = DeployState.RETRACTED;
   private boolean shootingPressureMode = false;
   private double deployedPositionRad = 0.0;
+  private double retractedPositionRad = 0.0;
   private boolean rehomeRequested = false;
   // Latches true when pushed back past threshold; stays true until fully returned to deployed
   // position, preventing bang-bang oscillation.
@@ -115,9 +121,7 @@ public class Intake extends SubsystemBase {
 
   // Roller jam detection
   private final Timer rollerJamTimer = new Timer();
-  private final Timer rollerJamReverseTimer = new Timer();
   private boolean rollerJammed = false;
-  private Goal goalBeforeJam = Goal.IDLE;
 
   // Alerts
   private final Alert deployDisconnectedAlert =
@@ -240,7 +244,13 @@ public class Intake extends SubsystemBase {
         } else if (shootingPressureMode) {
           deployIO.setVoltage(retractVoltage.get());
         } else {
-          deployIO.stop();
+          // Only hold when drifted away from hard stop — avoids fighting it when already seated
+          double driftRad = deployInputs.positionRad - retractedPositionRad;
+          if (driftRad > retractHoldDriftThresholdRad.get()) {
+            deployIO.setVoltage(retractHoldVoltage.get());
+          } else {
+            deployIO.stop();
+          }
         }
         break;
 
@@ -361,7 +371,7 @@ public class Intake extends SubsystemBase {
       boolean stallCondition =
           rollerActive
               && rollerInputs.statorCurrentAmps > rollerJamCurrentThreshold.get()
-              && Math.abs(rollerInputs.velocityRadPerSec) < Math.abs(commandedVelRadPerSec) * 0.1;
+              && Math.abs(rollerInputs.velocityRadPerSec) < Math.abs(commandedVelRadPerSec) * 0.75;
 
       if (!stallCondition) {
         rollerJamTimer.restart();
@@ -369,19 +379,12 @@ public class Intake extends SubsystemBase {
 
       // Handle jam state
       if (rollerJammed) {
-        // Reversing to clear jam
-        rollerIO.setVelocity(rpmToRadPerSec(rollerEjectRPM.get()));
-        if (rollerJamReverseTimer.hasElapsed(rollerJamReverseTime.get())) {
-          // Done reversing, resume previous goal
-          rollerJammed = false;
-          goal = goalBeforeJam;
-        }
+        // Stopped — waiting for driver to release intake goal
+        rollerIO.stop();
       } else if (rollerActive && rollerJamTimer.hasElapsed(rollerJamDebounceTime.get())) {
-        // Jam detected — start reversing
+        // Jam detected — stop roller
         rollerJammed = true;
-        goalBeforeJam = goal;
-        rollerJamReverseTimer.restart();
-        rollerIO.setVelocity(rpmToRadPerSec(rollerEjectRPM.get()));
+        rollerIO.stop();
       } else if (rollerActive) {
         rollerIO.setVelocity(commandedVelRadPerSec);
       } else {
@@ -407,6 +410,9 @@ public class Intake extends SubsystemBase {
       positionCorrectionGaveUp = false;
     } else if (deployState == DeployState.DEPLOYED) {
       deployIO.setBrakeMode(true);
+    }
+    if (newState == DeployState.RETRACTED) {
+      retractedPositionRad = deployInputs.positionRad;
     }
     deployState = newState;
     stallTimer.restart();

@@ -6,6 +6,8 @@ import choreo.auto.AutoTrajectory;
 import choreo.util.ChoreoAllianceFlipUtil;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.ProfiledPIDController;
+import edu.wpi.first.math.filter.Debouncer;
+import edu.wpi.first.math.filter.Debouncer.DebounceType;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
@@ -301,17 +303,15 @@ public class AutoRoutines {
   }
 
   /**
-   * Trench Outpost Points: Deploys intake immediately, runs TrenchOutpostPoints trajectory. Spins
-   * up shooter at "Spin" waypoint. After trajectory ends, aims and shoots (stationary or creeping
-   * toward Points start based on Auto/TrenchShootOnMove tunable). Then runs Points again.
+   * Trench Outpost Points: Runs TrenchOutpostPoints trajectory. Deploys intake at "Intake"
+   * waypoint, spins up shooter at "Spin" waypoint. After trajectory ends, shoots statically (like
+   * doublepass bump), then rushes back over the outpost bump.
    */
   public AutoRoutine trenchOutpostPoints() {
     return buildTrenchPoints(
         "Trench Outpost Points",
         routine -> routine.trajectory("TrenchOutpostPoints"),
-        routine -> routine.trajectory("OutpostStagingGather"),
-        trenchOutpostStagingX::get,
-        trenchOutpostStagingY::get);
+        routine -> routine.trajectory("OutpostBump"));
   }
 
   /** Trench Depot Points: Mirrors outpost points to the depot side via mirrorY(). */
@@ -319,9 +319,7 @@ public class AutoRoutines {
     return buildTrenchPoints(
         "Trench Depot Points",
         routine -> routine.trajectory("TrenchOutpostPoints").mirrorY(),
-        routine -> routine.trajectory("OutpostStagingGather").mirrorY(),
-        trenchDepotStagingX::get,
-        trenchDepotStagingY::get);
+        routine -> routine.trajectory("DepotBump"));
   }
 
   /**
@@ -452,18 +450,19 @@ public class AutoRoutines {
   }
 
   /**
-   * Builds a trench points auto. Deploys intake immediately, runs the points trajectory (shooter
-   * spinup at "Spin" waypoint), then aims and shoots, then gathers until auto ends.
+   * Builds a trench points auto. Runs the points trajectory (intake deploys at "Intake" waypoint,
+   * shooter spins up at "Spin" waypoint), then aims and shoots, then gathers until auto ends.
    */
   private AutoRoutine buildTrenchPoints(
       String name,
       java.util.function.Function<AutoRoutine, AutoTrajectory> pointsFactory,
-      java.util.function.Function<AutoRoutine, AutoTrajectory> gatherFactory,
-      DoubleSupplier stagingX,
-      DoubleSupplier stagingY) {
+      java.util.function.Function<AutoRoutine, AutoTrajectory> bumpFactory) {
     AutoRoutine routine = factory.newRoutine(name);
     AutoTrajectory pointsTraj = pointsFactory.apply(routine);
-    AutoTrajectory gatherTraj = gatherFactory.apply(routine);
+    AutoTrajectory bumpTraj = bumpFactory.apply(routine);
+
+    // Deploy intake at the "Intake" waypoint marker
+    pointsTraj.atTime("Intake").onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
 
     // Spin up shooter at the "Spin" waypoint (before crossing bump)
     pointsTraj.atTime("Spin").onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)));
@@ -472,35 +471,40 @@ public class AutoRoutines {
         .active()
         .onTrue(
             Commands.sequence(
-                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
                 pointsTraj.resetOdometry(),
 
-                // Deploy intake right away
-
-                // Follow Points trajectory; shooter spins up at "Spin" waypoint
+                // Follow Points trajectory; intake deploys at "Intake", shooter spins at "Spin"
                 pointsTraj.cmd(),
 
-                // Retract intake for shooting
+                // Retract intake for static shot
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
 
-                // Aim at hub and shoot while PIDing toward staging pose near the wall
-                trenchShootSequence(stagingX, stagingY),
+                // Static shot: aim at hub, wait until aimed+at-setpoint for 0.5s, then feed.
+                Commands.deadline(
+                    Commands.sequence(
+                        Commands.defer(
+                            () -> {
+                              Debouncer aimDebouncer = new Debouncer(0.5, DebounceType.kRising);
+                              return Commands.waitUntil(
+                                      () -> aimDebouncer.calculate(isAimedAtHub()))
+                                  .withTimeout(2.0);
+                            },
+                            Set.of()),
+                        Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                        intake.periodicAutoRehomeCommand().withTimeout(10.0)),
+                    aimBackAtHub()),
 
-                // Lower hood to 26° before entering trench for gather pass
-                Commands.runOnce(() -> shooter.setHoodAngle(26.0)),
-                Commands.waitSeconds(0.25),
+                // Stop shooter and indexer
+                Commands.runOnce(
+                    () -> {
+                      shooter.setGoal(Shooter.Goal.IDLE);
+                      indexer.setGoal(Indexer.Goal.IDLE);
+                    }),
 
-                // PID to gather path start so second pass is consistent
-                sprintToPose(gatherTraj.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
-
-                // Gather: run OutpostStagingGather, deploying intake at its "Intake" marker
-                trenchGatherRun(gatherTraj),
-
-                // Retract intake, clear hood command, spin up shooter, and shoot gathered balls
-                Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
-                Commands.runOnce(() -> shooter.clearHoodAngle()),
-                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
-                trenchShootSequence(stagingX, stagingY)));
+                // Rush over bump with intake deployed
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
+                sprintToPose(bumpTraj.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
+                bumpTraj.cmd()));
 
     return routine;
   }
@@ -908,6 +912,22 @@ public class AutoRoutines {
             },
             drive)
         .beforeStarting(() -> headingController.reset(drive.getRotation().getRadians()));
+  }
+
+  /** Returns true when the back of the robot is aimed at the hub within kTrenchAimToleranceRad. */
+  private boolean isAimedAtHub() {
+    boolean isRed =
+        DriverStation.getAlliance().isPresent()
+            && DriverStation.getAlliance().get() == Alliance.Red;
+    Translation2d hubCenter = FieldConstants.getHubCenter(isRed);
+    Translation2d toHub = hubCenter.minus(drive.getPose().getTranslation());
+    double targetHeading =
+        MathUtil.angleModulus(
+            Math.atan2(toHub.getY(), toHub.getX())
+                + Math.PI
+                + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees));
+    double error = MathUtil.angleModulus(targetHeading - drive.getRotation().getRadians());
+    return Math.abs(error) < kTrenchAimToleranceRad;
   }
 
   /**
