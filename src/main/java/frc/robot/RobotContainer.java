@@ -530,6 +530,23 @@ public class RobotContainer {
                   op.getHID().setRumble(GenericHID.RumbleType.kBothRumble, 0.0);
                 }));
 
+    // Rumble right side of both controllers for 2 seconds when roller jam is detected
+    new Trigger(intake::isRollerJammed)
+        .onTrue(
+            Commands.sequence(
+                    Commands.runOnce(
+                        () -> {
+                          drv.getHID().setRumble(GenericHID.RumbleType.kRightRumble, 1.0);
+                          op.getHID().setRumble(GenericHID.RumbleType.kRightRumble, 1.0);
+                        }),
+                    Commands.waitSeconds(2.0),
+                    Commands.runOnce(
+                        () -> {
+                          drv.getHID().setRumble(GenericHID.RumbleType.kRightRumble, 0.0);
+                          op.getHID().setRumble(GenericHID.RumbleType.kRightRumble, 0.0);
+                        }))
+                .ignoringDisable(true));
+
     // Driver DPAD: snap intake (front) to cardinal field directions, releases rotation once arrived
     // UP = 180°, RIGHT = 90°, DOWN = 0°, LEFT = -90°
     final double kDpadSnapTolerance = Math.toRadians(2.0);

@@ -6,6 +6,8 @@ import choreo.auto.AutoTrajectory;
 import choreo.util.ChoreoAllianceFlipUtil;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.ProfiledPIDController;
+import edu.wpi.first.math.filter.Debouncer;
+import edu.wpi.first.math.filter.Debouncer.DebounceType;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
@@ -125,14 +127,7 @@ public class AutoRoutines {
 
   public AutoRoutine outpostDoublePass() {
     return buildDoublePass(
-        "Outpost Double Pass",
-        "OutpostBump",
-        "OutpostDoublePass",
-        "OutpostBumpReturn",
-        false,
-        routine -> routine.trajectory("OutpostStagingGather"),
-        trenchOutpostStagingX::get,
-        trenchOutpostStagingY::get);
+        "Outpost Double Pass", "OutpostBump", "OutpostDoublePass", "OutpostBumpReturn", false);
   }
 
   public AutoRoutine outpostDoublePassShootFirst() {
@@ -141,58 +136,27 @@ public class AutoRoutines {
         "OutpostBump",
         "OutpostDoublePass",
         "OutpostBumpReturn",
-        true,
-        routine -> routine.trajectory("OutpostStagingGather"),
-        trenchOutpostStagingX::get,
-        trenchOutpostStagingY::get);
+        true);
   }
 
   public AutoRoutine depotDoublePass() {
     return buildDoublePass(
-        "Depot Double Pass",
-        "DepotBump",
-        "DepotDoublePass",
-        "DepotBumpReturn",
-        false,
-        routine -> routine.trajectory("OutpostStagingGather").mirrorY(),
-        trenchDepotStagingX::get,
-        trenchDepotStagingY::get);
+        "Depot Double Pass", "DepotBump", "DepotDoublePass", "DepotBumpReturn", false);
   }
 
   public AutoRoutine depotDoublePassShootFirst() {
     return buildDoublePass(
-        "Depot Double Pass Shoot First",
-        "DepotBump",
-        "DepotDoublePass",
-        "DepotBumpReturn",
-        true,
-        routine -> routine.trajectory("OutpostStagingGather").mirrorY(),
-        trenchDepotStagingX::get,
-        trenchDepotStagingY::get);
+        "Depot Double Pass Shoot First", "DepotBump", "DepotDoublePass", "DepotBumpReturn", true);
   }
 
   public AutoRoutine outpostFullPass() {
     return buildDoublePass(
-        "Outpost FULL Pass",
-        "OutpostBump",
-        "FullOutpostSinglePass",
-        "OutpostBumpReturn",
-        false,
-        routine -> routine.trajectory("OutpostStagingGather"),
-        trenchOutpostStagingX::get,
-        trenchOutpostStagingY::get);
+        "Outpost FULL Pass", "OutpostBump", "FullOutpostSinglePass", "OutpostBumpReturn", false);
   }
 
   public AutoRoutine outpostSinglePass() {
     return buildDoublePass(
-        "Outpost Single Pass",
-        "OutpostBump",
-        "OutpostSinglePass",
-        "OutpostBumpReturn",
-        false,
-        routine -> routine.trajectory("OutpostStagingGather"),
-        trenchOutpostStagingX::get,
-        trenchOutpostStagingY::get);
+        "Outpost Single Pass", "OutpostBump", "OutpostSinglePass", "OutpostBumpReturn", false);
   }
 
   public AutoRoutine outpostSinglePassShootFirst() {
@@ -201,34 +165,17 @@ public class AutoRoutines {
         "OutpostBump",
         "OutpostSinglePass",
         "OutpostBumpReturn",
-        true,
-        routine -> routine.trajectory("OutpostStagingGather"),
-        trenchOutpostStagingX::get,
-        trenchOutpostStagingY::get);
+        true);
   }
 
   public AutoRoutine depotSinglePass() {
     return buildDoublePass(
-        "Depot Single Pass",
-        "DepotBump",
-        "DepotSinglePass",
-        "DepotBumpReturn",
-        false,
-        routine -> routine.trajectory("OutpostStagingGather").mirrorY(),
-        trenchDepotStagingX::get,
-        trenchDepotStagingY::get);
+        "Depot Single Pass", "DepotBump", "DepotSinglePass", "DepotBumpReturn", false);
   }
 
   public AutoRoutine depotSinglePassShootFirst() {
     return buildDoublePass(
-        "Depot Single Pass Shoot First",
-        "DepotBump",
-        "DepotSinglePass",
-        "DepotBumpReturn",
-        true,
-        routine -> routine.trajectory("OutpostStagingGather").mirrorY(),
-        trenchDepotStagingX::get,
-        trenchDepotStagingY::get);
+        "Depot Single Pass Shoot First", "DepotBump", "DepotSinglePass", "DepotBumpReturn", true);
   }
 
   /**
@@ -356,17 +303,15 @@ public class AutoRoutines {
   }
 
   /**
-   * Trench Outpost Points: Deploys intake immediately, runs TrenchOutpostPoints trajectory. Spins
-   * up shooter at "Spin" waypoint. After trajectory ends, aims and shoots (stationary or creeping
-   * toward Points start based on Auto/TrenchShootOnMove tunable). Then runs Points again.
+   * Trench Outpost Points: Runs TrenchOutpostPoints trajectory. Deploys intake at "Intake"
+   * waypoint, spins up shooter at "Spin" waypoint. After trajectory ends, shoots statically (like
+   * doublepass bump), then rushes back over the outpost bump.
    */
   public AutoRoutine trenchOutpostPoints() {
     return buildTrenchPoints(
         "Trench Outpost Points",
         routine -> routine.trajectory("TrenchOutpostPoints"),
-        routine -> routine.trajectory("OutpostStagingGather"),
-        trenchOutpostStagingX::get,
-        trenchOutpostStagingY::get);
+        routine -> routine.trajectory("OutpostBump"));
   }
 
   /** Trench Depot Points: Mirrors outpost points to the depot side via mirrorY(). */
@@ -374,9 +319,7 @@ public class AutoRoutines {
     return buildTrenchPoints(
         "Trench Depot Points",
         routine -> routine.trajectory("TrenchOutpostPoints").mirrorY(),
-        routine -> routine.trajectory("OutpostStagingGather").mirrorY(),
-        trenchDepotStagingX::get,
-        trenchDepotStagingY::get);
+        routine -> routine.trajectory("DepotBump"));
   }
 
   /**
@@ -507,18 +450,19 @@ public class AutoRoutines {
   }
 
   /**
-   * Builds a trench points auto. Deploys intake immediately, runs the points trajectory (shooter
-   * spinup at "Spin" waypoint), then aims and shoots, then gathers until auto ends.
+   * Builds a trench points auto. Runs the points trajectory (intake deploys at "Intake" waypoint,
+   * shooter spins up at "Spin" waypoint), then aims and shoots, then gathers until auto ends.
    */
   private AutoRoutine buildTrenchPoints(
       String name,
       java.util.function.Function<AutoRoutine, AutoTrajectory> pointsFactory,
-      java.util.function.Function<AutoRoutine, AutoTrajectory> gatherFactory,
-      DoubleSupplier stagingX,
-      DoubleSupplier stagingY) {
+      java.util.function.Function<AutoRoutine, AutoTrajectory> bumpFactory) {
     AutoRoutine routine = factory.newRoutine(name);
     AutoTrajectory pointsTraj = pointsFactory.apply(routine);
-    AutoTrajectory gatherTraj = gatherFactory.apply(routine);
+    AutoTrajectory bumpTraj = bumpFactory.apply(routine);
+
+    // Deploy intake at the "Intake" waypoint marker
+    pointsTraj.atTime("Intake").onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
 
     // Spin up shooter at the "Spin" waypoint (before crossing bump)
     pointsTraj.atTime("Spin").onTrue(Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)));
@@ -527,35 +471,40 @@ public class AutoRoutines {
         .active()
         .onTrue(
             Commands.sequence(
-                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
                 pointsTraj.resetOdometry(),
 
-                // Deploy intake right away
-
-                // Follow Points trajectory; shooter spins up at "Spin" waypoint
+                // Follow Points trajectory; intake deploys at "Intake", shooter spins at "Spin"
                 pointsTraj.cmd(),
 
-                // Retract intake for shooting
+                // Retract intake for static shot
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
 
-                // Aim at hub and shoot while PIDing toward staging pose near the wall
-                trenchShootSequence(stagingX, stagingY),
+                // Static shot: aim at hub, wait until aimed+at-setpoint for 0.5s, then feed.
+                Commands.deadline(
+                    Commands.sequence(
+                        Commands.defer(
+                            () -> {
+                              Debouncer aimDebouncer = new Debouncer(0.5, DebounceType.kRising);
+                              return Commands.waitUntil(
+                                      () -> aimDebouncer.calculate(isAimedAtHub()))
+                                  .withTimeout(2.0);
+                            },
+                            Set.of()),
+                        Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                        intake.periodicAutoRehomeCommand().withTimeout(10.0)),
+                    aimBackAtHub()),
 
-                // Lower hood to 26° before entering trench for gather pass
-                Commands.runOnce(() -> shooter.setHoodAngle(26.0)),
-                Commands.waitSeconds(0.25),
+                // Stop shooter and indexer
+                Commands.runOnce(
+                    () -> {
+                      shooter.setGoal(Shooter.Goal.IDLE);
+                      indexer.setGoal(Indexer.Goal.IDLE);
+                    }),
 
-                // PID to gather path start so second pass is consistent
-                sprintToPose(gatherTraj.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
-
-                // Gather: run OutpostStagingGather, deploying intake at its "Intake" marker
-                trenchGatherRun(gatherTraj),
-
-                // Retract intake, clear hood command, spin up shooter, and shoot gathered balls
-                Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
-                Commands.runOnce(() -> shooter.clearHoodAngle()),
-                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
-                trenchShootSequence(stagingX, stagingY)));
+                // Rush over bump with intake deployed
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
+                sprintToPose(bumpTraj.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
+                bumpTraj.cmd()));
 
     return routine;
   }
@@ -662,23 +611,19 @@ public class AutoRoutines {
 
   /**
    * Builds a double pass auto routine. Crosses bump, intakes across the field via trajectory,
-   * returns over bump, then shoots on the move toward the staging pose and runs a gather pass. If
-   * shootFirst is true, shoots the preloaded ball before crossing the bump.
+   * returns over bump, aims at hub, and feeds for remaining time. If shootFirst is true, shoots the
+   * preloaded ball before crossing the bump.
    */
   private AutoRoutine buildDoublePass(
       String name,
       String bumpTrajName,
       String doublePassTrajName,
       String bumpReturnTrajName,
-      boolean shootFirst,
-      java.util.function.Function<AutoRoutine, AutoTrajectory> gatherFactory,
-      DoubleSupplier stagingX,
-      DoubleSupplier stagingY) {
+      boolean shootFirst) {
     AutoRoutine routine = factory.newRoutine(name);
     AutoTrajectory bump = routine.trajectory(bumpTrajName);
     AutoTrajectory doublePass = routine.trajectory(doublePassTrajName);
     AutoTrajectory bumpReturn = routine.trajectory(bumpReturnTrajName);
-    AutoTrajectory gatherTraj = gatherFactory.apply(routine);
 
     // Build shoot-first prefix if needed
     Command shootFirstSequence = shootFirst ? shootFirstPreloadCommand() : Commands.none();
@@ -717,25 +662,28 @@ public class AutoRoutines {
                 // Cross back over bump via Choreo trajectory
                 bumpReturn.cmd(),
 
-                // Correct positional error introduced by bump crossing
+                // Sprint to final shooting position after bump (corrects positional error from bump
+                // crossing)
                 sprintToPose(bumpReturn.getFinalPose().orElse(new Pose2d())).withTimeout(2.0),
 
-                // Shoot on the move toward staging pose
-                trenchShootSequence(stagingX, stagingY),
+                // Aim at hub continuously while feeding/shooting for remaining time;
+                // deadline ends when the feed sequence finishes
+                Commands.deadline(
+                    Commands.sequence(
+                        Commands.waitSeconds(1.0),
+                        Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                        intake.periodicAutoRehomeCommand().withTimeout(10.0)),
+                    aimBackAtHub()),
 
-                // Lower hood to 26° before entering trench for gather pass
-                Commands.runOnce(() -> shooter.setHoodAngle(26.0)),
-                Commands.waitSeconds(0.25),
-
-                // Gather
-                trenchGatherRun(gatherTraj),
-
-                // If time remains after gather, retract intake, clear hood command, spin up, and
-                // shoot again
-                Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
-                Commands.runOnce(() -> shooter.clearHoodAngle()),
-                Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
-                trenchShootSequence(stagingX, stagingY)));
+                // Stop shooter and indexer, then rush back over the bump toward the middle of the
+                // field with intake deployed to pick up any staged balls along the way
+                Commands.runOnce(
+                    () -> {
+                      shooter.setGoal(Shooter.Goal.IDLE);
+                      indexer.setGoal(Indexer.Goal.IDLE);
+                    }),
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
+                bump.cmd()));
 
     return routine;
   }
@@ -964,6 +912,22 @@ public class AutoRoutines {
             },
             drive)
         .beforeStarting(() -> headingController.reset(drive.getRotation().getRadians()));
+  }
+
+  /** Returns true when the back of the robot is aimed at the hub within kTrenchAimToleranceRad. */
+  private boolean isAimedAtHub() {
+    boolean isRed =
+        DriverStation.getAlliance().isPresent()
+            && DriverStation.getAlliance().get() == Alliance.Red;
+    Translation2d hubCenter = FieldConstants.getHubCenter(isRed);
+    Translation2d toHub = hubCenter.minus(drive.getPose().getTranslation());
+    double targetHeading =
+        MathUtil.angleModulus(
+            Math.atan2(toHub.getY(), toHub.getX())
+                + Math.PI
+                + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees));
+    double error = MathUtil.angleModulus(targetHeading - drive.getRotation().getRadians());
+    return Math.abs(error) < kTrenchAimToleranceRad;
   }
 
   /**

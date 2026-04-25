@@ -69,7 +69,8 @@ public final class ShooterConstants {
     map.put(3.5, 3200.0);
     map.put(4.0, 3250.0); // ~5.5 Distance to corner of alliance zone shot
     map.put(4.5, 3450.0); // ~5.5 Distance to corner of alliance zone shot
-    map.put(5.1, 3550.0); // ~5.5 Distance to corner of alliance zone shot
+    map.put(5.1, 3450.0); // ~5.5 Distance to corner of alliance zone shot
+    map.put(5.15, 3450.0); // ~5.5 Distance to corner of alliance zone shot
     map.put(6.0, 5500.0); // Long passing shots
     map.put(6.5, 6000.0); // Long passing shots
     return map;
@@ -88,7 +89,10 @@ public final class ShooterConstants {
     map.put(3.5, 28.5);
     map.put(4.0, 29.5);
     map.put(4.5, 31.0);
-    map.put(5.5, 32.0);
+    map.put(5.0, 32.5);
+    map.put(5.25, 32.0);
+    map.put(5.8, 38.0);
+
     return map;
   }
 
