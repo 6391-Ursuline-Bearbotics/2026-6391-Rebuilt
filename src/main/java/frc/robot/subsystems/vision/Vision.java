@@ -58,6 +58,16 @@ public class Vision extends SubsystemBase {
     return inputs[cameraIndex].latestTargetObservation.tx();
   }
 
+  /** Returns true if any camera is currently observing at least one AprilTag. */
+  public boolean hasTagsInView() {
+    for (var cameraInputs : inputs) {
+      if (cameraInputs.tagIds.length > 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   @Override
   public void periodic() {
     for (int i = 0; i < io.length; i++) {

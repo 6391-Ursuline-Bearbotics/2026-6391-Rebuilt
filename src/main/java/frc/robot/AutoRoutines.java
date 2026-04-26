@@ -16,6 +16,7 @@ import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
@@ -24,6 +25,7 @@ import frc.robot.subsystems.indexer.Indexer;
 import frc.robot.subsystems.intake.Intake;
 import frc.robot.subsystems.shooter.Shooter;
 import frc.robot.subsystems.shooter.ShooterConstants;
+import frc.robot.subsystems.vision.Vision;
 import frc.robot.util.LoggedTunableNumber;
 import java.util.Optional;
 import java.util.Set;
@@ -73,19 +75,37 @@ public class AutoRoutines {
   private static final LoggedTunableNumber gatherSlowSpeedMps =
       new LoggedTunableNumber("Auto/GatherSlowSpeedMps", 1.2);
 
+  // Speed (m/s) to creep toward the alliance wall when no AprilTags are visible after crossing back
+  // over the bump. Odometry drift from the bump can leave the robot closer to the hub than it
+  // thinks; creeping toward the wall brings it into camera range so vision can correct the pose.
+  private static final LoggedTunableNumber bumpCreepSpeedMps =
+      new LoggedTunableNumber("Auto/BumpCreepSpeedMps", 0.3);
+
+  // Seconds elapsed from routine activation at which the shoot phase ends and the bump rush begins.
+  // The minimum shootDurationSecs is always completed first; this only extends beyond that.
+  private static final LoggedTunableNumber bumpRushAutoTimeSecs =
+      new LoggedTunableNumber("Auto/BumpRushAutoTimeSecs", 17.5);
+
   private final AutoFactory factory;
   private final Drive drive;
   private final Intake intake;
   private final Indexer indexer;
   private final Shooter shooter;
+  private final Vision vision;
 
   public AutoRoutines(
-      AutoFactory factory, Drive drive, Intake intake, Indexer indexer, Shooter shooter) {
+      AutoFactory factory,
+      Drive drive,
+      Intake intake,
+      Indexer indexer,
+      Shooter shooter,
+      Vision vision) {
     this.factory = factory;
     this.drive = drive;
     this.intake = intake;
     this.indexer = indexer;
     this.shooter = shooter;
+    this.vision = vision;
   }
 
   public AutoRoutine resetOdometryStart() {
@@ -285,10 +305,7 @@ public class AutoRoutines {
     return buildTrenchDisrupt(
         "Trench Outpost Disrupt",
         routine -> routine.trajectory("TrenchOutpostDisrupt"),
-        routine -> routine.trajectory("TrenchOutpostPoints"),
-        routine -> routine.trajectory("OutpostStagingGather"),
-        trenchOutpostStagingX::get,
-        trenchOutpostStagingY::get);
+        routine -> routine.trajectory("OutpostBump"));
   }
 
   /** Trench Depot Disrupt: Mirrors outpost disrupt to the depot side via mirrorY(). */
@@ -296,10 +313,7 @@ public class AutoRoutines {
     return buildTrenchDisrupt(
         "Trench Depot Disrupt",
         routine -> routine.trajectory("TrenchOutpostDisrupt").mirrorY(),
-        routine -> routine.trajectory("TrenchOutpostPoints").mirrorY(),
-        routine -> routine.trajectory("OutpostStagingGather").mirrorY(),
-        trenchDepotStagingX::get,
-        trenchDepotStagingY::get);
+        routine -> routine.trajectory("DepotBump"));
   }
 
   /**
@@ -347,20 +361,17 @@ public class AutoRoutines {
 
   /**
    * Builds a trench disrupt auto. Runs the disrupt trajectory (intake at "Intake" waypoint, shooter
-   * spinup at "Spin" waypoint), then aims and shoots, then repeats Points trajectory cycles until
-   * auto ends.
+   * spinup at "Spin" waypoint), then does a static shot (same structure as Points), then rushes
+   * back over the bump with intake deployed.
    */
   private AutoRoutine buildTrenchDisrupt(
       String name,
       java.util.function.Function<AutoRoutine, AutoTrajectory> disruptFactory,
-      java.util.function.Function<AutoRoutine, AutoTrajectory> pointsFactory,
-      java.util.function.Function<AutoRoutine, AutoTrajectory> gatherFactory,
-      DoubleSupplier stagingX,
-      DoubleSupplier stagingY) {
+      java.util.function.Function<AutoRoutine, AutoTrajectory> bumpFactory) {
     AutoRoutine routine = factory.newRoutine(name);
     AutoTrajectory disruptTraj = disruptFactory.apply(routine);
-    AutoTrajectory pointsTraj = pointsFactory.apply(routine);
-    AutoTrajectory gatherTraj = gatherFactory.apply(routine);
+    AutoTrajectory bumpTraj = bumpFactory.apply(routine);
+    Timer autoTimer = new Timer();
 
     // Deploy intake at the "Intake" waypoint on the disrupt trajectory
     disruptTraj.atTime("Intake").onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
@@ -371,6 +382,7 @@ public class AutoRoutines {
         .active()
         .onTrue(
             Commands.sequence(
+                Commands.runOnce(() -> autoTimer.restart()),
                 disruptTraj.resetOdometry(),
 
                 // Rush out; intake and shooter activate via waypoint events
@@ -379,18 +391,36 @@ public class AutoRoutines {
                 // Retract intake for shooting
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
 
-                // Aim at hub and shoot while PIDing toward staging pose near the wall
-                trenchShootSequence(stagingX, stagingY),
+                // Static shot: wait until aimed for 0.5s, feed for at least shootDurationSecs,
+                // then keep shooting until bumpRushAutoTimeSecs have elapsed since routine start.
+                Commands.deadline(
+                    Commands.sequence(
+                        Commands.defer(
+                            () -> {
+                              Debouncer aimDebouncer = new Debouncer(0.5, DebounceType.kRising);
+                              return Commands.waitUntil(
+                                      () -> aimDebouncer.calculate(isAimedAtHub()))
+                                  .withTimeout(2.0);
+                            },
+                            Set.of()),
+                        Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                        Commands.defer(
+                            () -> Commands.waitSeconds(shootDurationSecs.get()), Set.of()),
+                        Commands.waitUntil(() -> autoTimer.get() >= bumpRushAutoTimeSecs.get())),
+                    aimBackAtHubWithVisionCreep(),
+                    intake.periodicAutoRehomeCommand()),
 
-                // Lower hood to 26° before entering trench for gather pass
-                Commands.runOnce(() -> shooter.setHoodAngle(26.0)),
-                Commands.waitSeconds(0.25),
+                // Stop shooter and indexer
+                Commands.runOnce(
+                    () -> {
+                      shooter.setGoal(Shooter.Goal.IDLE);
+                      indexer.setGoal(Indexer.Goal.IDLE);
+                    }),
 
-                // PID to gather path start so second pass is consistent
-                sprintToPose(gatherTraj.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
-
-                // Gather: run OutpostStagingGather, deploying intake at its "Intake" marker
-                trenchGatherRun(gatherTraj)));
+                // Rush over bump with intake deployed
+                Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
+                sprintToPose(bumpTraj.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
+                bumpTraj.cmd()));
 
     return routine;
   }
@@ -460,6 +490,7 @@ public class AutoRoutines {
     AutoRoutine routine = factory.newRoutine(name);
     AutoTrajectory pointsTraj = pointsFactory.apply(routine);
     AutoTrajectory bumpTraj = bumpFactory.apply(routine);
+    Timer autoTimer = new Timer();
 
     // Deploy intake at the "Intake" waypoint marker
     pointsTraj.atTime("Intake").onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)));
@@ -471,6 +502,7 @@ public class AutoRoutines {
         .active()
         .onTrue(
             Commands.sequence(
+                Commands.runOnce(() -> autoTimer.restart()),
                 pointsTraj.resetOdometry(),
 
                 // Follow Points trajectory; intake deploys at "Intake", shooter spins at "Spin"
@@ -479,7 +511,8 @@ public class AutoRoutines {
                 // Retract intake for static shot
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
 
-                // Static shot: aim at hub, wait until aimed+at-setpoint for 0.5s, then feed.
+                // Static shot: wait until aimed for 0.5s, feed for at least shootDurationSecs,
+                // then keep shooting until bumpRushAutoTimeSecs have elapsed since routine start.
                 Commands.deadline(
                     Commands.sequence(
                         Commands.defer(
@@ -491,8 +524,11 @@ public class AutoRoutines {
                             },
                             Set.of()),
                         Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-                        intake.periodicAutoRehomeCommand().withTimeout(10.0)),
-                    aimBackAtHub()),
+                        Commands.defer(
+                            () -> Commands.waitSeconds(shootDurationSecs.get()), Set.of()),
+                        Commands.waitUntil(() -> autoTimer.get() >= bumpRushAutoTimeSecs.get())),
+                    aimBackAtHubWithVisionCreep(),
+                    intake.periodicAutoRehomeCommand()),
 
                 // Stop shooter and indexer
                 Commands.runOnce(
@@ -575,9 +611,10 @@ public class AutoRoutines {
                           current.getRotation().getRadians(), targetHeading);
 
                   // Translation: proportional drive toward staging pose near the wall.
+                  boolean isRed = ChoreoAllianceFlipUtil.shouldFlip();
                   Translation2d staging =
                       new Translation2d(stagingX.getAsDouble(), stagingY.getAsDouble());
-                  if (ChoreoAllianceFlipUtil.shouldFlip()) {
+                  if (isRed) {
                     staging = ChoreoAllianceFlipUtil.flip(staging);
                   }
                   Translation2d toStaging = staging.minus(current.getTranslation());
@@ -589,6 +626,10 @@ public class AutoRoutines {
                     double speed = Math.min(trenchStagingSpeedMps.get(), distance * 2.0);
                     vx = Math.cos(angle) * speed;
                     vy = Math.sin(angle) * speed;
+                  } else if (!vision.hasTagsInView()) {
+                    // At staging pose but no tags visible — odometry likely drifted over the bump.
+                    // Creep toward alliance wall until vision is restored.
+                    vx = isRed ? bumpCreepSpeedMps.get() : -bumpCreepSpeedMps.get();
                   }
 
                   drive.runVelocity(
@@ -666,14 +707,14 @@ public class AutoRoutines {
                 // crossing)
                 sprintToPose(bumpReturn.getFinalPose().orElse(new Pose2d())).withTimeout(2.0),
 
-                // Aim at hub continuously while feeding/shooting for remaining time;
-                // deadline ends when the feed sequence finishes
+                // Aim at hub while feeding/shooting. If no tags are visible (odometry may have
+                // drifted over the bump), creep toward alliance wall until vision is restored.
                 Commands.deadline(
                     Commands.sequence(
                         Commands.waitSeconds(1.0),
                         Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
                         intake.periodicAutoRehomeCommand().withTimeout(10.0)),
-                    aimBackAtHub()),
+                    aimBackAtHubWithVisionCreep()),
 
                 // Stop shooter and indexer, then rush back over the bump toward the middle of the
                 // field with intake deployed to pick up any staged balls along the way
@@ -909,6 +950,46 @@ public class AutoRoutines {
 
               drive.runVelocity(
                   ChassisSpeeds.fromFieldRelativeSpeeds(0, 0, omega, current.getRotation()));
+            },
+            drive)
+        .beforeStarting(() -> headingController.reset(drive.getRotation().getRadians()));
+  }
+
+  /**
+   * Like aimBackAtHub(), but also creeps toward the alliance wall when no AprilTags are visible.
+   * Used after returning over the bump, where odometry drift can leave the robot too close to the
+   * hub to see tags. The creep moves it into range; vision then corrects the pose estimate.
+   */
+  private Command aimBackAtHubWithVisionCreep() {
+    ProfiledPIDController headingController =
+        new ProfiledPIDController(5.0, 0, 0.4, new TrapezoidProfile.Constraints(8.0, 20.0));
+    headingController.enableContinuousInput(-Math.PI, Math.PI);
+
+    return Commands.run(
+            () -> {
+              Pose2d current = drive.getPose();
+              boolean isRed =
+                  DriverStation.getAlliance().isPresent()
+                      && DriverStation.getAlliance().get() == Alliance.Red;
+              Translation2d hubCenter = FieldConstants.getHubCenter(isRed);
+
+              Translation2d toHub = hubCenter.minus(current.getTranslation());
+              double angleToHub = Math.atan2(toHub.getY(), toHub.getX());
+              double targetHeading =
+                  angleToHub
+                      + Math.PI
+                      + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
+
+              double omega =
+                  headingController.calculate(current.getRotation().getRadians(), targetHeading);
+
+              double vx = 0;
+              if (!vision.hasTagsInView()) {
+                vx = isRed ? bumpCreepSpeedMps.get() : -bumpCreepSpeedMps.get();
+              }
+
+              drive.runVelocity(
+                  ChassisSpeeds.fromFieldRelativeSpeeds(vx, 0, omega, current.getRotation()));
             },
             drive)
         .beforeStarting(() -> headingController.reset(drive.getRotation().getRadians()));

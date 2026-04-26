@@ -253,7 +253,7 @@ public class RobotContainer {
     // Preload Choreo classes at init time instead of delaying auto start (v2026.0.3)
     CommandScheduler.getInstance().schedule(autoFactory.warmupCmd());
 
-    autoRoutines = new AutoRoutines(autoFactory, drive, intake, indexer, shooter);
+    autoRoutines = new AutoRoutines(autoFactory, drive, intake, indexer, shooter, vision);
     autoChooser = new AutoChooser();
     SmartDashboard.putData("Auto Choices", autoChooser);
     SmartDashboard.putData("Auto Preview", autoPreviewField);
