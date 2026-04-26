@@ -916,6 +916,9 @@ public class AutoRoutines {
     ProfiledPIDController headingController =
         new ProfiledPIDController(5.0, 0, 0.4, new TrapezoidProfile.Constraints(8.0, 20.0));
     headingController.enableContinuousInput(-Math.PI, Math.PI);
+    // Latches true the first time tags are seen after the bump return. Once vision has had one
+    // good look it has corrected odometry, so we never creep again for this shoot phase.
+    boolean[] tagsSeenOnce = {false};
 
     return Commands.run(
             () -> {
@@ -935,8 +938,11 @@ public class AutoRoutines {
               double omega =
                   headingController.calculate(current.getRotation().getRadians(), targetHeading);
 
+              if (vision.hasTagsInView()) {
+                tagsSeenOnce[0] = true;
+              }
               double vx = 0;
-              if (!vision.hasTagsInView()) {
+              if (!tagsSeenOnce[0]) {
                 vx = isRed ? bumpCreepSpeedMps.get() : -bumpCreepSpeedMps.get();
               }
 
