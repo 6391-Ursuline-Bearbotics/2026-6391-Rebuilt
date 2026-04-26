@@ -345,7 +345,19 @@ public class RobotContainer {
 
     // Mode selection buttons
     drv.b().onTrue(Commands.runOnce(() -> currentDriveMode = DriveMode.STANDARD));
-    drv.y().whileTrue(Commands.run(() -> drive.stopWithX(), drive));
+    drv.y()
+        .whileTrue(
+            Commands.run(
+                () -> {
+                  double lx = MathUtil.applyDeadband(drv.getLeftX(), 0.1);
+                  double ly = MathUtil.applyDeadband(drv.getLeftY(), 0.1);
+                  if (Math.hypot(lx, ly) > 0.0) {
+                    runStandardDrive();
+                  } else {
+                    drive.stopWithX();
+                  }
+                },
+                drive));
     drv.a()
         .onTrue(
             Commands.runOnce(
