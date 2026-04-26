@@ -454,14 +454,21 @@ public class RobotContainer {
                   currentDriveMode = DriveMode.STANDARD;
                 }));
 
-    // Auto-spinup + auto-aim, wait for both, then feed (hold).  Works on both controllers
+    // Auto-spinup + auto-aim, wait for both, then feed (hold).  Works on both controllers.
+    // Uses hub tables (Goal.SHOOT) when in alliance zone, pass tables (Goal.PASS) otherwise.
     op.rightTrigger(0.5)
         .or(drv.rightTrigger(0.5))
         .whileTrue(
             Commands.sequence(
                     Commands.runOnce(
                         () -> {
-                          shooter.setGoal(Shooter.Goal.SHOOT);
+                          boolean isRed =
+                              DriverStation.getAlliance().isPresent()
+                                  && DriverStation.getAlliance().get() == Alliance.Red;
+                          boolean inAllianceZone =
+                              FieldConstants.isInOwnAllianceZone(
+                                  drive.getPose().getTranslation(), isRed);
+                          shooter.setGoal(inAllianceZone ? Shooter.Goal.SHOOT : Shooter.Goal.PASS);
                           currentDriveMode = DriveMode.AIM_TARGET;
                           aimTargetController.reset(drive.getRotation().getRadians());
                         }),
