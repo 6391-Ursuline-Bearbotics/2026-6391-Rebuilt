@@ -87,7 +87,6 @@ public class RobotContainer {
   // Drive modes
   public enum DriveMode {
     STANDARD,
-    SNAKE,
     AIM_TARGET // Aims at Hub in alliance zone, passing target otherwise
   }
 
@@ -337,9 +336,6 @@ public class RobotContainer {
                 case STANDARD:
                   runStandardDrive();
                   break;
-                case SNAKE:
-                  runSnakeDrive();
-                  break;
                 case AIM_TARGET:
                   runAimTargetDrive();
                   break;
@@ -350,13 +346,18 @@ public class RobotContainer {
     // Mode selection buttons
     drv.b().onTrue(Commands.runOnce(() -> currentDriveMode = DriveMode.STANDARD));
     drv.y()
-        .onTrue(
-            Commands.runOnce(
+        .whileTrue(
+            Commands.run(
                 () -> {
-                  currentDriveMode = DriveMode.SNAKE;
-                  snakeAngleController.reset(drive.getRotation().getRadians());
-                  lastSnakeHeading = drive.getRotation().getRadians();
-                }));
+                  double lx = MathUtil.applyDeadband(drv.getLeftX(), 0.1);
+                  double ly = MathUtil.applyDeadband(drv.getLeftY(), 0.1);
+                  if (Math.hypot(lx, ly) > 0.0) {
+                    runStandardDrive();
+                  } else {
+                    drive.stopWithX();
+                  }
+                },
+                drive));
     drv.a()
         .onTrue(
             Commands.runOnce(
@@ -453,14 +454,21 @@ public class RobotContainer {
                   currentDriveMode = DriveMode.STANDARD;
                 }));
 
-    // Auto-spinup + auto-aim, wait for both, then feed (hold).  Works on both controllers
+    // Auto-spinup + auto-aim, wait for both, then feed (hold).  Works on both controllers.
+    // Uses hub tables (Goal.SHOOT) when in alliance zone, pass tables (Goal.PASS) otherwise.
     op.rightTrigger(0.5)
         .or(drv.rightTrigger(0.5))
         .whileTrue(
             Commands.sequence(
                     Commands.runOnce(
                         () -> {
-                          shooter.setGoal(Shooter.Goal.SHOOT);
+                          boolean isRed =
+                              DriverStation.getAlliance().isPresent()
+                                  && DriverStation.getAlliance().get() == Alliance.Red;
+                          boolean inAllianceZone =
+                              FieldConstants.isInOwnAllianceZone(
+                                  drive.getPose().getTranslation(), isRed);
+                          shooter.setGoal(inAllianceZone ? Shooter.Goal.SHOOT : Shooter.Goal.PASS);
                           currentDriveMode = DriveMode.AIM_TARGET;
                           aimTargetController.reset(drive.getRotation().getRadians());
                         }),
@@ -606,14 +614,10 @@ public class RobotContainer {
       new LoggedTunableNumber("Shooter/GyrationFreqHz", 5.0);
 
   // Drive mode helper methods
-  private final ProfiledPIDController snakeAngleController =
-      new ProfiledPIDController(5.0, 0.0, 0.4, new TrapezoidProfile.Constraints(6.0, 15.0));
   private final ProfiledPIDController aimTargetController =
       new ProfiledPIDController(5.0, 0.0, 0.4, new TrapezoidProfile.Constraints(8.0, 20.0));
-  private double lastSnakeHeading = 0.0;
 
   {
-    snakeAngleController.enableContinuousInput(-Math.PI, Math.PI);
     aimTargetController.enableContinuousInput(-Math.PI, Math.PI);
   }
 
@@ -723,34 +727,6 @@ public class RobotContainer {
     }
 
     drive.runVelocity(robotRelative);
-  }
-
-  private void runSnakeDrive() {
-    Translation2d linearVelocity = getLinearVelocityFromJoysticks();
-
-    double targetHeading;
-    if (linearVelocity.getNorm() > 0.01) {
-      targetHeading = Math.atan2(linearVelocity.getY(), linearVelocity.getX());
-      lastSnakeHeading = targetHeading;
-    } else {
-      targetHeading = lastSnakeHeading;
-    }
-
-    double omega = snakeAngleController.calculate(drive.getRotation().getRadians(), targetHeading);
-
-    ChassisSpeeds speeds =
-        new ChassisSpeeds(
-            linearVelocity.getX() * drive.getMaxLinearSpeedMetersPerSec(),
-            linearVelocity.getY() * drive.getMaxLinearSpeedMetersPerSec(),
-            omega);
-
-    boolean isFlipped =
-        DriverStation.getAlliance().isPresent()
-            && DriverStation.getAlliance().get() == Alliance.Red;
-    drive.runVelocity(
-        ChassisSpeeds.fromFieldRelativeSpeeds(
-            speeds,
-            isFlipped ? drive.getRotation().plus(new Rotation2d(Math.PI)) : drive.getRotation()));
   }
 
   private void runAimTargetDrive() {

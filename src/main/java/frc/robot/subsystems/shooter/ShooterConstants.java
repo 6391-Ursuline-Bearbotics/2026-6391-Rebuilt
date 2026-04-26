@@ -23,6 +23,8 @@ public final class ShooterConstants {
 
   // Setpoint tolerance for isAtSetpoint()
   public static final double toleranceRPM = 100.0;
+  // Passing shots don't need precise speed — wider tolerance so the gate opens under low battery
+  public static final double passToleranceRPM = 600.0;
 
   // Bang-bang FOC mode
   public static final double bangBangKp = 999999.0;
@@ -56,31 +58,23 @@ public final class ShooterConstants {
   // Simulation
   public static final double simMOI = 0.001;
 
-  /**
-   * Distance (meters) -> Shooter RPM interpolation table. Populate with empirical data from
-   * testing. Values below are placeholders.
-   */
-  public static InterpolatingDoubleTreeMap createDistanceToRPMMap() {
+  /** Distance (meters) -> Shooter RPM for hub shots (alliance area). */
+  public static InterpolatingDoubleTreeMap createHubDistanceToRPMMap() {
     var map = new InterpolatingDoubleTreeMap();
-    map.put(1.8, 2500.0); // 2 is auto starting point
+    map.put(1.8, 2500.0); // auto starting point
     map.put(2.0, 2600.0);
-    map.put(2.5, 2800.0); // 2 is auto starting point
-    map.put(3.0, 3000.0); // ~3 Distance to trench shot
+    map.put(2.5, 2800.0);
+    map.put(3.0, 3000.0); // trench shot
     map.put(3.5, 3200.0);
-    map.put(4.0, 3250.0); // ~5.5 Distance to corner of alliance zone shot
-    map.put(4.5, 3450.0); // ~5.5 Distance to corner of alliance zone shot
-    map.put(5.1, 3450.0); // ~5.5 Distance to corner of alliance zone shot
-    map.put(5.15, 3450.0); // ~5.5 Distance to corner of alliance zone shot
-    map.put(6.0, 5500.0); // Long passing shots
-    map.put(6.5, 6000.0); // Long passing shots
+    map.put(4.0, 3250.0);
+    map.put(4.5, 3450.0);
+    map.put(5.1, 3450.0);
+    map.put(5.15, 3450.0);
     return map;
   }
 
-  /**
-   * Distance (meters) -> Hood angle (degrees) interpolation table. Populate with empirical data
-   * from testing. Values below are placeholders.
-   */
-  public static InterpolatingDoubleTreeMap createDistanceToAngleMap() {
+  /** Distance (meters) -> Hood angle (degrees) for hub shots (alliance area). */
+  public static InterpolatingDoubleTreeMap createHubDistanceToAngleMap() {
     var map = new InterpolatingDoubleTreeMap();
     map.put(1.5, 26.0); // 26 is our lowest angle
     map.put(1.8, 26.0);
@@ -92,7 +86,27 @@ public final class ShooterConstants {
     map.put(5.0, 32.5);
     map.put(5.25, 32.0);
     map.put(5.8, 38.0);
+    return map;
+  }
 
+  /** Distance (meters) -> Shooter RPM for passing shots. */
+  public static InterpolatingDoubleTreeMap createPassDistanceToRPMMap() {
+    var map = new InterpolatingDoubleTreeMap();
+    // TODO: Populate with measured passing data
+    map.put(3.6, 3800.0);
+    map.put(5.0, 4000.0);
+    map.put(6.0, 5500.0);
+    map.put(6.5, 6000.0);
+    return map;
+  }
+
+  /** Distance (meters) -> Hood angle (degrees) for passing shots. */
+  public static InterpolatingDoubleTreeMap createPassDistanceToAngleMap() {
+    var map = new InterpolatingDoubleTreeMap();
+    // TODO: Populate with measured passing data
+    map.put(5.0, 40.0);
+    map.put(6.0, 40.0);
+    map.put(6.5, 40.0);
     return map;
   }
 
