@@ -29,7 +29,6 @@ import frc.robot.subsystems.vision.Vision;
 import frc.robot.util.LoggedTunableNumber;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.BooleanSupplier;
 import java.util.function.DoubleSupplier;
 import org.littletonrobotics.junction.Logger;
 
@@ -463,8 +462,43 @@ public class AutoRoutines {
                 // Retract intake for shooting
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
 
-                // Aim at hub and shoot while PIDing toward staging pose near the wall
-                trenchShootSequence(stagingX, stagingY),
+                // Sprint to staging position with back of robot aimed at hub
+                Commands.defer(
+                    () -> {
+                      boolean isRed = ChoreoAllianceFlipUtil.shouldFlip();
+                      Translation2d staging =
+                          new Translation2d(stagingX.getAsDouble(), stagingY.getAsDouble());
+                      if (isRed) staging = ChoreoAllianceFlipUtil.flip(staging);
+                      Translation2d hubCenter = FieldConstants.getHubCenter(isRed);
+                      Translation2d toHub = hubCenter.minus(staging);
+                      double aimAngle =
+                          Math.atan2(toHub.getY(), toHub.getX())
+                              + Math.PI
+                              + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees);
+                      return sprintToPose(new Pose2d(staging, new Rotation2d(aimAngle)))
+                          .withTimeout(2.0);
+                    },
+                    Set.of(drive)),
+
+                // Static shoot from staging position
+                Commands.deadline(
+                    Commands.sequence(
+                        Commands.defer(
+                            () -> {
+                              Debouncer aimDebouncer = new Debouncer(0.5, DebounceType.kRising);
+                              return Commands.waitUntil(
+                                      () -> aimDebouncer.calculate(isAimedAtHub()))
+                                  .withTimeout(2.0);
+                            },
+                            Set.of()),
+                        Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
+                        Commands.defer(
+                            () -> Commands.waitSeconds(shootDurationSecs.get()), Set.of())),
+                    aimBackAtHubWithVisionCreep(),
+                    intake.periodicAutoRehomeCommand()),
+
+                // Stop indexer before gather pass
+                Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.IDLE)),
 
                 // Lower hood to 26° before entering trench for gather pass
                 Commands.runOnce(() -> shooter.setHoodAngle(26.0)),
@@ -566,89 +600,7 @@ public class AutoRoutines {
         .finallyDo(interrupted -> drive.clearTrajectorySpeedCap());
   }
 
-  /**
-   * Aims the back of the robot at the hub and feeds while PID driving toward the tunable staging
-   * pose. The shooter's shoot-on-the-move compensation (radial + lateral) handles power adjustment
-   * for robot velocity.
-   */
   private static final double kTrenchAimToleranceRad = Math.toRadians(4.5);
-
-  private Command trenchShootSequence(DoubleSupplier stagingX, DoubleSupplier stagingY) {
-    ProfiledPIDController headingController =
-        new ProfiledPIDController(5.0, 0, 0.4, new TrapezoidProfile.Constraints(8.0, 20.0));
-    headingController.enableContinuousInput(-Math.PI, Math.PI);
-
-    BooleanSupplier isAimed =
-        () -> {
-          Translation2d aimTarget = shooter.getAimTarget();
-          Translation2d toTarget = aimTarget.minus(drive.getPose().getTranslation());
-          double targetHeading =
-              MathUtil.angleModulus(
-                  Math.atan2(toTarget.getY(), toTarget.getX())
-                      + Math.PI
-                      + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees));
-          double error = MathUtil.angleModulus(targetHeading - drive.getRotation().getRadians());
-          return Math.abs(error) < kTrenchAimToleranceRad;
-        };
-
-    Command aimAndDrive =
-        Commands.run(
-                () -> {
-                  Pose2d current = drive.getPose();
-
-                  // Heading: back of robot aimed at compensated virtual target (accounts for
-                  // robot velocity so lateral drift during motion is corrected).
-                  Translation2d aimTarget = shooter.getAimTarget();
-                  Translation2d toTarget = aimTarget.minus(current.getTranslation());
-                  double angleToTarget = Math.atan2(toTarget.getY(), toTarget.getX());
-                  double targetHeading =
-                      MathUtil.angleModulus(
-                          angleToTarget
-                              + Math.PI
-                              + Math.toRadians(ShooterConstants.shooterHeadingOffsetDegrees));
-                  double omega =
-                      headingController.calculate(
-                          current.getRotation().getRadians(), targetHeading);
-
-                  // Translation: proportional drive toward staging pose near the wall.
-                  boolean isRed = ChoreoAllianceFlipUtil.shouldFlip();
-                  Translation2d staging =
-                      new Translation2d(stagingX.getAsDouble(), stagingY.getAsDouble());
-                  if (isRed) {
-                    staging = ChoreoAllianceFlipUtil.flip(staging);
-                  }
-                  Translation2d toStaging = staging.minus(current.getTranslation());
-                  double distance = toStaging.getNorm();
-                  double vx = 0;
-                  double vy = 0;
-                  if (distance > 0.15) {
-                    double angle = Math.atan2(toStaging.getY(), toStaging.getX());
-                    double speed = Math.min(trenchStagingSpeedMps.get(), distance * 2.0);
-                    vx = Math.cos(angle) * speed;
-                    vy = Math.sin(angle) * speed;
-                  } else if (!vision.hasTagsInView()) {
-                    // At staging pose but no tags visible — odometry likely drifted over the bump.
-                    // Creep toward alliance wall until vision is restored.
-                    vx = isRed ? bumpCreepSpeedMps.get() : -bumpCreepSpeedMps.get();
-                  }
-
-                  drive.runVelocity(
-                      ChassisSpeeds.fromFieldRelativeSpeeds(vx, vy, omega, current.getRotation()));
-                },
-                drive)
-            .beforeStarting(() -> headingController.reset(drive.getRotation().getRadians()));
-
-    return Commands.deadline(
-        Commands.sequence(
-            Commands.waitUntil(() -> shooter.isAtSetpoint() && isAimed.getAsBoolean())
-                .withTimeout(2.0),
-            Commands.defer(() -> Commands.waitSeconds(shootSettleSecs.get()), Set.of()),
-            Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.FEED)),
-            Commands.defer(() -> Commands.waitSeconds(shootDurationSecs.get()), Set.of()),
-            Commands.runOnce(() -> indexer.setGoal(Indexer.Goal.IDLE))),
-        aimAndDrive,
-        intake.periodicAutoRehomeCommand());
-  }
 
   /**
    * Builds a double pass auto routine. Crosses bump, intakes across the field via trajectory,
