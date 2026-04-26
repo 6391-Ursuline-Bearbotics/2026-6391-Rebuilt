@@ -84,6 +84,7 @@ public class Shooter extends SubsystemBase {
   public enum Goal {
     IDLE,
     SHOOT,
+    PASS,
     EJECT
   }
 
@@ -101,9 +102,13 @@ public class Shooter extends SubsystemBase {
   // Returns true while any shot button is physically held on either controller
   private final BooleanSupplier shotButtonHeldSupplier;
 
-  // Interpolation tables
-  private final InterpolatingDoubleTreeMap distanceToRPM;
-  private final InterpolatingDoubleTreeMap distanceToAngle;
+  // Interpolation tables — hub shots
+  private final InterpolatingDoubleTreeMap hubDistanceToRPM;
+  private final InterpolatingDoubleTreeMap hubDistanceToAngle;
+  // Interpolation tables — passing shots
+  private final InterpolatingDoubleTreeMap passDistanceToRPM;
+  private final InterpolatingDoubleTreeMap passDistanceToAngle;
+  // Shared time-of-flight table
   private final InterpolatingDoubleTreeMap distanceToTOF;
 
   // State
@@ -151,15 +156,17 @@ public class Shooter extends SubsystemBase {
     this.indexerFeedingSupplier = indexerFeedingSupplier;
     this.pitchSupplier = pitchSupplier;
     this.shotButtonHeldSupplier = shotButtonHeldSupplier;
-    this.distanceToRPM = ShooterConstants.createDistanceToRPMMap();
-    this.distanceToAngle = ShooterConstants.createDistanceToAngleMap();
+    this.hubDistanceToRPM = ShooterConstants.createHubDistanceToRPMMap();
+    this.hubDistanceToAngle = ShooterConstants.createHubDistanceToAngleMap();
+    this.passDistanceToRPM = ShooterConstants.createPassDistanceToRPMMap();
+    this.passDistanceToAngle = ShooterConstants.createPassDistanceToAngleMap();
     this.distanceToTOF = ShooterConstants.createDistanceToTOFMap();
     jamTimer.start();
   }
 
   public void setGoal(Goal goal) {
     this.goal = goal;
-    if (goal == Goal.SHOOT) {
+    if (goal == Goal.SHOOT || goal == Goal.PASS) {
       hoodAngleCommandDeg = 0.0;
     }
   }
@@ -260,15 +267,15 @@ public class Shooter extends SubsystemBase {
         hashCode() + 1, values -> io.setPeakTorqueCurrent(values[0]), bangBangPeakAmps);
 
     // Clear jam flag when goal changes to an active state (operator re-engages)
-    if ((goal == Goal.SHOOT || goal == Goal.EJECT) && jammed) {
+    if ((goal == Goal.SHOOT || goal == Goal.PASS || goal == Goal.EJECT) && jammed) {
       jammed = false;
       jamTimer.restart();
     }
 
     switch (goal) {
       case SHOOT:
-        commandedRPM = calculateShootRPM();
-        commandedAngleDeg = distanceToAngle.get(distanceToTarget);
+        commandedRPM = calculateShootRPM(hubDistanceToRPM);
+        commandedAngleDeg = hubDistanceToAngle.get(distanceToTarget);
         if (GameData.canSpinUp(poseSupplier.get().getTranslation())) {
           // Latch spunUp once at setpoint (resets when goal changes away from SHOOT)
           if (isAtSetpoint()) {
@@ -301,6 +308,15 @@ public class Shooter extends SubsystemBase {
           io.stop();
         }
         break;
+      case PASS:
+        commandedRPM = calculateShootRPM(passDistanceToRPM);
+        commandedAngleDeg = passDistanceToAngle.get(distanceToTarget);
+        if (isAtSetpoint()) {
+          spunUp = true;
+        }
+        io.setVelocity(rpmToRadPerSec(commandedRPM));
+        Logger.recordOutput("Shooter/ControlMode", "PID");
+        break;
       case EJECT:
         commandedRPM = ejectRPM.get();
         commandedAngleDeg = ShooterConstants.hoodMinAngleDeg;
@@ -316,7 +332,7 @@ public class Shooter extends SubsystemBase {
     }
 
     // Jam detection: high current + near-zero velocity on either motor while actively commanded
-    if (goal == Goal.SHOOT || goal == Goal.EJECT) {
+    if (goal == Goal.SHOOT || goal == Goal.PASS || goal == Goal.EJECT) {
       double commandedVel = rpmToRadPerSec(commandedRPM);
       boolean leftStall =
           inputs.leftStatorCurrentAmps > jamCurrentThreshold.get()
@@ -408,7 +424,7 @@ public class Shooter extends SubsystemBase {
   }
 
   /** Returns the target RPM based on the current distanceToTarget (updated each loop). */
-  private double calculateShootRPM() {
+  private double calculateShootRPM(InterpolatingDoubleTreeMap rpmTable) {
     if (rpmOverride.get() != 0.0) {
       return rpmOverride.get();
     }
@@ -439,7 +455,7 @@ public class Shooter extends SubsystemBase {
     }
     Logger.recordOutput("Shooter/EffectiveDistance", effectiveDistance);
 
-    double baseRPM = distanceToRPM.get(effectiveDistance);
+    double baseRPM = rpmTable.get(effectiveDistance);
 
     // Apply pitch compensation outside the dead zone
     double pitch = pitchSupplier.get();
@@ -567,6 +583,11 @@ public class Shooter extends SubsystemBase {
   public Command shootCommand() {
     return Commands.startEnd(() -> setGoal(Goal.SHOOT), () -> setGoal(Goal.IDLE), this)
         .withName("Shooter Shoot");
+  }
+
+  public Command passCommand() {
+    return Commands.startEnd(() -> setGoal(Goal.PASS), () -> setGoal(Goal.IDLE), this)
+        .withName("Shooter Pass");
   }
 
   public Command ejectCommand() {
