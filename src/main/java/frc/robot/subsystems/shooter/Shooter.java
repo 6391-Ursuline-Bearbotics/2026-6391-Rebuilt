@@ -39,6 +39,8 @@ public class Shooter extends SubsystemBase {
       new LoggedTunableNumber("Shooter/EjectRPM", ShooterConstants.ejectRPM);
   private static final LoggedTunableNumber toleranceRPM =
       new LoggedTunableNumber("Shooter/ToleranceRPM", ShooterConstants.toleranceRPM);
+  private static final LoggedTunableNumber passToleranceRPM =
+      new LoggedTunableNumber("Shooter/PassToleranceRPM", ShooterConstants.passToleranceRPM);
 
   // RPM override for manual testing (0 = use distance table)
   private static final LoggedTunableNumber rpmOverride =
@@ -230,10 +232,11 @@ public class Shooter extends SubsystemBase {
   /** Returns true if both motors are within tolerance of the commanded setpoint. */
   @AutoLogOutput(key = "Shooter/AtSetpoint")
   public boolean isAtSetpoint() {
-    if (goal != Goal.SHOOT || commandedRPM == 0.0) {
+    if ((goal != Goal.SHOOT && goal != Goal.PASS) || commandedRPM == 0.0) {
       return false;
     }
-    double tolerance = rpmToRadPerSec(toleranceRPM.get());
+    double tol = goal == Goal.PASS ? passToleranceRPM.get() : toleranceRPM.get();
+    double tolerance = rpmToRadPerSec(tol);
     double setpoint = rpmToRadPerSec(commandedRPM);
     return Math.abs(inputs.leftVelocityRadPerSec - setpoint) < tolerance
         && Math.abs(inputs.rightVelocityRadPerSec - setpoint) < tolerance;
