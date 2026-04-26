@@ -18,6 +18,7 @@ import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.wpilibj.Alert;
 import edu.wpi.first.wpilibj.Alert.AlertType;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.subsystems.vision.VisionIO.PoseObservationType;
 import java.util.LinkedList;
@@ -29,6 +30,11 @@ public class Vision extends SubsystemBase {
   private final VisionIO[] io;
   private final VisionIOInputsAutoLogged[] inputs;
   private final Alert[] disconnectedAlerts;
+
+  // Timestamp of the last loop cycle where any camera reported at least one tag ID.
+  // Limelight publishes at ~10-15 Hz but the robot loop runs at 50 Hz, so tagIds is empty
+  // for most loops even when tags are visible. We hold "in view" for 500 ms after the last hit.
+  private double lastTagSeenTimestamp = Double.NEGATIVE_INFINITY;
 
   public Vision(VisionConsumer consumer, VisionIO... io) {
     this.consumer = consumer;
@@ -56,6 +62,15 @@ public class Vision extends SubsystemBase {
    */
   public Rotation2d getTargetX(int cameraIndex) {
     return inputs[cameraIndex].latestTargetObservation.tx();
+  }
+
+  /**
+   * Returns true if any camera has seen at least one AprilTag within the last 500 ms. The 500 ms
+   * window compensates for the Limelight's ~10-15 Hz publish rate vs. the 50 Hz robot loop — tag
+   * IDs only appear in inputs on the loop cycles where fresh NT data arrives.
+   */
+  public boolean hasTagsInView() {
+    return (Timer.getFPGATimestamp() - lastTagSeenTimestamp) < 0.5;
   }
 
   @Override
@@ -174,6 +189,11 @@ public class Vision extends SubsystemBase {
       Logger.recordOutput(
           "Vision/Camera" + Integer.toString(cameraIndex) + "/RobotPosesRejected",
           robotPosesRejected.toArray(new Pose3d[0]));
+      // Refresh tag-seen timestamp whenever this camera has fresh tag data
+      if (inputs[cameraIndex].tagIds.length > 0) {
+        lastTagSeenTimestamp = Timer.getFPGATimestamp();
+      }
+
       allTagPoses.addAll(tagPoses);
       allRobotPoses.addAll(robotPoses);
       allRobotPosesAccepted.addAll(robotPosesAccepted);
