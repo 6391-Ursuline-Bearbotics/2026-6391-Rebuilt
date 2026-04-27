@@ -46,7 +46,7 @@ public class AutoRoutines {
   private static final LoggedTunableNumber trenchOutpostStagingX =
       new LoggedTunableNumber("Auto/TrenchOutpostStagingX", 3.0);
   private static final LoggedTunableNumber trenchOutpostStagingY =
-      new LoggedTunableNumber("Auto/TrenchOutpostStagingY", 0.66);
+      new LoggedTunableNumber("Auto/TrenchOutpostStagingY", 0.75);
   private static final LoggedTunableNumber trenchDepotStagingX =
       new LoggedTunableNumber("Auto/TrenchDepotStagingX", 3.0);
   private static final LoggedTunableNumber trenchDepotStagingY =
