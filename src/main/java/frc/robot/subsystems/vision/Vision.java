@@ -73,6 +73,14 @@ public class Vision extends SubsystemBase {
     return (Timer.getFPGATimestamp() - lastTagSeenTimestamp) < 0.5;
   }
 
+  /** Returns true if at least one camera is currently reporting as connected. */
+  public boolean hasCameraConnected() {
+    for (var input : inputs) {
+      if (input.connected) return true;
+    }
+    return false;
+  }
+
   @Override
   public void periodic() {
     for (int i = 0; i < io.length; i++) {

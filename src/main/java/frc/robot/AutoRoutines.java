@@ -938,7 +938,7 @@ public class AutoRoutines {
               double omega =
                   headingController.calculate(current.getRotation().getRadians(), targetHeading);
 
-              if (vision.hasTagsInView()) {
+              if (vision.hasTagsInView() || !vision.hasCameraConnected()) {
                 tagsSeenOnce[0] = true;
               }
               double vx = 0;
