@@ -562,6 +562,12 @@ public class Shooter extends SubsystemBase {
     return Math.abs(hoodInputs.positionDeg - targetDeg) < toleranceDeg;
   }
 
+  /** Returns true if the hood is at or below 26 degrees. */
+  @AutoLogOutput(key = "Shooter/HoodAtOrBelow26Deg")
+  public boolean isHoodAtOrBelow26Deg() {
+    return hoodInputs.positionDeg <= 26.0;
+  }
+
   private void updateAlerts() {
     leftDisconnectedAlert.set(!inputs.leftConnected && Constants.currentMode != Mode.SIM);
     rightDisconnectedAlert.set(!inputs.rightConnected && Constants.currentMode != Mode.SIM);
