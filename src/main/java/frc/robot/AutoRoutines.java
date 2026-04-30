@@ -454,7 +454,7 @@ public class AutoRoutines {
 
                 // Lower hood to 26° before entering trench (first pass)
                 Commands.runOnce(() -> shooter.setHoodAngle(26.0)),
-                Commands.waitSeconds(0.25),
+                Commands.waitSeconds(1.0),
 
                 // Follow trajectory; intake and shooter activate via waypoint events
                 followTraj.cmd(),
@@ -502,7 +502,7 @@ public class AutoRoutines {
 
                 // Lower hood to 26° before entering trench for gather pass
                 Commands.runOnce(() -> shooter.setHoodAngle(26.0)),
-                Commands.waitSeconds(0.25),
+                Commands.waitSeconds(1.0),
 
                 // PID to gather path start so second pass is consistent
                 sprintToPose(gatherTraj.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),

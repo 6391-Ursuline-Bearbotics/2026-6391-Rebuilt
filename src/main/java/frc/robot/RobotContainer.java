@@ -164,7 +164,7 @@ public class RobotContainer {
                     drive::getFieldRelativeSpeeds,
                     () -> indexer.getGoal() == Indexer.Goal.FEED,
                     drive::getPitch,
-                    drv.rightTrigger(0.5)
+                    drv.leftTrigger(0.5)
                         .or(op.rightTrigger(0.5))
                         .or(op.leftTrigger(0.5))
                         .or(op.leftBumper()))
@@ -175,7 +175,7 @@ public class RobotContainer {
                     drive::getFieldRelativeSpeeds,
                     () -> indexer.getGoal() == Indexer.Goal.FEED,
                     drive::getPitch,
-                    drv.rightTrigger(0.5)
+                    drv.leftTrigger(0.5)
                         .or(op.rightTrigger(0.5))
                         .or(op.leftTrigger(0.5))
                         .or(op.leftBumper()));
@@ -401,8 +401,8 @@ public class RobotContainer {
     op.b().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)));
     op.y().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.DEPLOYED_IDLE)));
 
-    // Driver clump intake mode (left trigger held)
-    drv.leftTrigger(0.5)
+    // Driver clump intake mode (left bumper held)
+    drv.leftBumper()
         .whileTrue(
             Commands.startEnd(
                 () -> {
@@ -467,7 +467,7 @@ public class RobotContainer {
     // Auto-spinup + auto-aim, wait for both, then feed (hold).  Works on both controllers.
     // Uses hub tables (Goal.SHOOT) when in alliance zone, pass tables (Goal.PASS) otherwise.
     op.rightTrigger(0.5)
-        .or(drv.rightTrigger(0.5))
+        .or(drv.leftTrigger(0.5))
         .whileTrue(
             Commands.sequence(
                     Commands.runOnce(
