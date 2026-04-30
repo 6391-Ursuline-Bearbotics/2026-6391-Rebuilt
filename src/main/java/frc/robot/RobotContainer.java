@@ -415,10 +415,20 @@ public class RobotContainer {
                 }));
 
     // Operator indexer controls (ungated feed + auto-spinup + adaptive intake)
+    // Uses hub tables (Goal.SHOOT) when in alliance zone, pass tables (Goal.PASS) otherwise.
     op.leftTrigger(0.5)
         .whileTrue(
             Commands.sequence(
-                    Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+                    Commands.runOnce(
+                        () -> {
+                          boolean isRed =
+                              DriverStation.getAlliance().isPresent()
+                                  && DriverStation.getAlliance().get() == Alliance.Red;
+                          boolean inAllianceZone =
+                              FieldConstants.isInOwnAllianceZone(
+                                  drive.getPose().getTranslation(), isRed);
+                          shooter.setGoal(inAllianceZone ? Shooter.Goal.SHOOT : Shooter.Goal.PASS);
+                        }),
                     Commands.run(() -> indexer.setGoal(Indexer.Goal.FEED))
                         .finallyDo(() -> indexer.setGoal(Indexer.Goal.IDLE)))
                 .alongWith(intakeWithMotionAdaptiveRehome()));
