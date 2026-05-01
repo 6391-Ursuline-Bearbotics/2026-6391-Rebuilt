@@ -24,7 +24,7 @@ public final class ShooterConstants {
   // Setpoint tolerance for isAtSetpoint()
   public static final double toleranceRPM = 100.0;
   // Passing shots don't need precise speed — wider tolerance so the gate opens under low battery
-  public static final double passToleranceRPM = 600.0;
+  public static final double passToleranceRPM = 1500.0;
 
   // Bang-bang FOC mode
   public static final double bangBangKp = 999999.0;
