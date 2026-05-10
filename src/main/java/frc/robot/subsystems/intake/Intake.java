@@ -145,6 +145,10 @@ public class Intake extends SubsystemBase {
     if (goal == Goal.IDLE && deployState == DeployState.RETRACTED) {
       rehomeRequested = true;
     }
+    // Re-pressing an active roller goal clears a jam so the operator doesn't need to retract first
+    if (goal == Goal.INTAKE || goal == Goal.CLUMP_INTAKE || goal == Goal.EJECT) {
+      rollerJammed = false;
+    }
     this.goal = goal;
   }
 

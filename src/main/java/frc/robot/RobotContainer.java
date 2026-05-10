@@ -164,7 +164,7 @@ public class RobotContainer {
                     drive::getFieldRelativeSpeeds,
                     () -> indexer.getGoal() == Indexer.Goal.FEED,
                     drive::getPitch,
-                    drv.rightTrigger(0.5)
+                    drv.leftTrigger(0.5)
                         .or(op.rightTrigger(0.5))
                         .or(op.leftTrigger(0.5))
                         .or(op.leftBumper()))
@@ -175,7 +175,7 @@ public class RobotContainer {
                     drive::getFieldRelativeSpeeds,
                     () -> indexer.getGoal() == Indexer.Goal.FEED,
                     drive::getPitch,
-                    drv.rightTrigger(0.5)
+                    drv.leftTrigger(0.5)
                         .or(op.rightTrigger(0.5))
                         .or(op.leftTrigger(0.5))
                         .or(op.leftBumper()));
@@ -252,7 +252,7 @@ public class RobotContainer {
     // Preload Choreo classes at init time instead of delaying auto start (v2026.0.3)
     CommandScheduler.getInstance().schedule(autoFactory.warmupCmd());
 
-    autoRoutines = new AutoRoutines(autoFactory, drive, intake, indexer, shooter);
+    autoRoutines = new AutoRoutines(autoFactory, drive, intake, indexer, shooter, vision);
     autoChooser = new AutoChooser();
     SmartDashboard.putData("Auto Choices", autoChooser);
     SmartDashboard.putData("Auto Preview", autoPreviewField);
@@ -401,8 +401,8 @@ public class RobotContainer {
     op.b().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)));
     op.y().onTrue(Commands.runOnce(() -> intake.setGoal(Intake.Goal.DEPLOYED_IDLE)));
 
-    // Driver clump intake mode (left trigger held)
-    drv.leftTrigger(0.5)
+    // Driver clump intake mode (left bumper held)
+    drv.leftBumper()
         .whileTrue(
             Commands.startEnd(
                 () -> {
@@ -415,10 +415,20 @@ public class RobotContainer {
                 }));
 
     // Operator indexer controls (ungated feed + auto-spinup + adaptive intake)
+    // Uses hub tables (Goal.SHOOT) when in alliance zone, pass tables (Goal.PASS) otherwise.
     op.leftTrigger(0.5)
         .whileTrue(
             Commands.sequence(
-                    Commands.runOnce(() -> shooter.setGoal(Shooter.Goal.SHOOT)),
+                    Commands.runOnce(
+                        () -> {
+                          boolean isRed =
+                              DriverStation.getAlliance().isPresent()
+                                  && DriverStation.getAlliance().get() == Alliance.Red;
+                          boolean inAllianceZone =
+                              FieldConstants.isInOwnAllianceZone(
+                                  drive.getPose().getTranslation(), isRed);
+                          shooter.setGoal(inAllianceZone ? Shooter.Goal.SHOOT : Shooter.Goal.PASS);
+                        }),
                     Commands.run(() -> indexer.setGoal(Indexer.Goal.FEED))
                         .finallyDo(() -> indexer.setGoal(Indexer.Goal.IDLE)))
                 .alongWith(intakeWithMotionAdaptiveRehome()));
@@ -457,7 +467,7 @@ public class RobotContainer {
     // Auto-spinup + auto-aim, wait for both, then feed (hold).  Works on both controllers.
     // Uses hub tables (Goal.SHOOT) when in alliance zone, pass tables (Goal.PASS) otherwise.
     op.rightTrigger(0.5)
-        .or(drv.rightTrigger(0.5))
+        .or(drv.leftTrigger(0.5))
         .whileTrue(
             Commands.sequence(
                     Commands.runOnce(

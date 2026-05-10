@@ -24,7 +24,7 @@ public final class ShooterConstants {
   // Setpoint tolerance for isAtSetpoint()
   public static final double toleranceRPM = 100.0;
   // Passing shots don't need precise speed — wider tolerance so the gate opens under low battery
-  public static final double passToleranceRPM = 600.0;
+  public static final double passToleranceRPM = 1500.0;
 
   // Bang-bang FOC mode
   public static final double bangBangKp = 999999.0;
@@ -93,9 +93,9 @@ public final class ShooterConstants {
   public static InterpolatingDoubleTreeMap createPassDistanceToRPMMap() {
     var map = new InterpolatingDoubleTreeMap();
     // TODO: Populate with measured passing data
-    map.put(3.6, 3800.0);
-    map.put(5.0, 4000.0);
-    map.put(6.0, 5500.0);
+    map.put(3.6, 4200.0);
+    map.put(5.0, 5350.0);
+    map.put(6.0, 5600.0);
     map.put(6.5, 6000.0);
     return map;
   }
