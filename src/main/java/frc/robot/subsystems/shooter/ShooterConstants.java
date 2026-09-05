@@ -65,11 +65,11 @@ public final class ShooterConstants {
     map.put(2.0, 2600.0);
     map.put(2.5, 2800.0);
     map.put(3.0, 3000.0); // trench shot
-    map.put(3.5, 3200.0);
-    map.put(4.0, 3250.0);
-    map.put(4.5, 3450.0);
-    map.put(5.1, 3450.0);
-    map.put(5.15, 3450.0);
+    map.put(3.5, 3300.0);
+    map.put(4.0, 3400.0);
+    map.put(4.5, 3550.0);
+    map.put(5.1, 3550.0);
+    map.put(5.15, 3550.0);
     return map;
   }
 
@@ -83,7 +83,7 @@ public final class ShooterConstants {
     map.put(3.5, 28.5);
     map.put(4.0, 29.5);
     map.put(4.5, 31.0);
-    map.put(5.0, 32.5);
+    map.put(5.1, 32.5);
     map.put(5.25, 32.0);
     map.put(5.8, 38.0);
     return map;

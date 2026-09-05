@@ -458,11 +458,13 @@ public class RobotContainer {
     // Right bumper: Stop shooter (toggle off) + return to standard drive mode
     op.rightBumper()
         .onTrue(
-            Commands.runOnce(
-                () -> {
-                  shooter.setGoal(Shooter.Goal.IDLE);
-                  currentDriveMode = DriveMode.STANDARD;
-                }));
+            Commands.sequence(
+                Commands.runOnce(
+                    () -> {
+                      shooter.setGoal(Shooter.Goal.IDLE);
+                      shooter.setHoodAngle(26.0);
+                    }),
+                Commands.waitUntil(() -> shooter.isHoodAtAngle(26.0, 1.0))));
 
     // Auto-spinup + auto-aim, wait for both, then feed (hold).  Works on both controllers.
     // Uses hub tables (Goal.SHOOT) when in alliance zone, pass tables (Goal.PASS) otherwise.
