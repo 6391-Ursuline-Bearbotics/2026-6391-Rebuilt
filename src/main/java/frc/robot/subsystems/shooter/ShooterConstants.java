@@ -93,8 +93,8 @@ public final class ShooterConstants {
   public static InterpolatingDoubleTreeMap createPassDistanceToRPMMap() {
     var map = new InterpolatingDoubleTreeMap();
     // TODO: Populate with measured passing data
-    map.put(3.6, 4200.0);
-    map.put(5.0, 5350.0);
+    map.put(3.6, 3500.0);
+    map.put(5.0, 3550.0);
     map.put(6.0, 5600.0);
     map.put(6.5, 6000.0);
     return map;
@@ -104,7 +104,7 @@ public final class ShooterConstants {
   public static InterpolatingDoubleTreeMap createPassDistanceToAngleMap() {
     var map = new InterpolatingDoubleTreeMap();
     // TODO: Populate with measured passing data
-    map.put(5.0, 40.0);
+    map.put(5.0, 38.0);
     map.put(6.0, 40.0);
     map.put(6.5, 40.0);
     return map;
