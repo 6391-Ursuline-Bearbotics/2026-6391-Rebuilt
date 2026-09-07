@@ -210,7 +210,7 @@ public class RobotContainer {
                 drive::getFieldRelativeSpeeds,
                 () -> indexer.getGoal() == Indexer.Goal.FEED,
                 drive::getPitch,
-                drv.rightTrigger(0.5)
+                drv.leftTrigger(0.5)
                     .or(op.rightTrigger(0.5))
                     .or(op.leftTrigger(0.5))
                     .or(op.leftBumper()));
@@ -640,11 +640,9 @@ public class RobotContainer {
    */
   private Command rehomeOnly() {
     edu.wpi.first.wpilibj.Timer rehomeTimer = new edu.wpi.first.wpilibj.Timer();
-    boolean[] rehoming = {false};
     return Commands.runOnce(
             () -> {
               rehomeTimer.restart();
-              rehoming[0] = false;
             })
         .andThen(
             Commands.run(
@@ -653,17 +651,10 @@ public class RobotContainer {
                   double speed = Math.hypot(speeds.vxMetersPerSecond, speeds.vyMetersPerSecond);
                   if (speed > 0.15) {
                     // Moving: reset rehome cycle, leave intake goal alone
-                    rehoming[0] = false;
                     rehomeTimer.restart();
-                  } else if (!rehoming[0] && rehomeTimer.hasElapsed(2.0)) {
-                    // Stationary: trigger brief rehome
-                    intake.setGoal(Intake.Goal.IDLE);
-                    rehomeTimer.restart();
-                    rehoming[0] = true;
-                  } else if (rehoming[0] && rehomeTimer.hasElapsed(0.75)) {
-                    // Rehome done: restore INTAKE
-                    intake.setGoal(Intake.Goal.INTAKE);
-                    rehoming[0] = false;
+                  } else if (rehomeTimer.hasElapsed(2.0)) {
+                    // Stationary: ask the intake to reseat without activating it afterward.
+                    intake.requestRehome();
                     rehomeTimer.restart();
                   }
                 }));
@@ -677,8 +668,10 @@ public class RobotContainer {
   private Command intakeWithMotionAdaptiveRehome() {
     edu.wpi.first.wpilibj.Timer rehomeTimer = new edu.wpi.first.wpilibj.Timer();
     boolean[] rehoming = {false};
+    Intake.Goal[] previousGoal = {Intake.Goal.IDLE};
     return Commands.runOnce(
             () -> {
+              previousGoal[0] = intake.getGoal();
               rehomeTimer.restart();
               rehoming[0] = false;
               intake.setGoal(Intake.Goal.INTAKE);
@@ -690,7 +683,9 @@ public class RobotContainer {
                   double speed = Math.hypot(speeds.vxMetersPerSecond, speeds.vyMetersPerSecond);
                   if (speed > 0.15) {
                     // Moving: stay in INTAKE and reset the rehome cycle
-                    intake.setGoal(Intake.Goal.INTAKE);
+                    if (intake.getGoal() != Intake.Goal.INTAKE) {
+                      intake.setGoal(Intake.Goal.INTAKE);
+                    }
                     rehoming[0] = false;
                     rehomeTimer.restart();
                   } else if (!rehoming[0] && rehomeTimer.hasElapsed(2.0)) {
@@ -704,7 +699,8 @@ public class RobotContainer {
                     rehoming[0] = false;
                     rehomeTimer.restart();
                   }
-                }));
+                }))
+        .finallyDo(() -> intake.setGoal(previousGoal[0]));
   }
 
   private void runStandardDrive() {
@@ -868,8 +864,25 @@ public class RobotContainer {
 
   /** Called at the start of teleop to reset subsystem states coming out of auto. */
   public void teleopInit() {
+    resetToSafeState();
+  }
+
+  /** Called whenever the robot disables to clear any latched command state. */
+  public void disabledInit() {
+    resetToSafeState();
+  }
+
+  private void resetToSafeState() {
     shooter.setGoal(Shooter.Goal.IDLE);
     indexer.setGoal(Indexer.Goal.IDLE);
+    intake.setGoal(Intake.Goal.IDLE);
+    intake.setShootingPressureMode(false);
+    currentDriveMode = DriveMode.STANDARD;
+    autoAimGyrating = false;
+    drive.clearMaxSpeedOverride();
+    drive.clearTrajectorySpeedCap();
+    drv.getHID().setRumble(GenericHID.RumbleType.kBothRumble, 0.0);
+    op.getHID().setRumble(GenericHID.RumbleType.kBothRumble, 0.0);
   }
 
   /**

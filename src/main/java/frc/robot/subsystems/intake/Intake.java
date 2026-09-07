@@ -50,6 +50,12 @@ public class Intake extends SubsystemBase {
       new LoggedTunableNumber("Intake/Deploy/RetractRollerShutoffFraction", 0.9);
   private static final LoggedTunableNumber rehomeDeployTime =
       new LoggedTunableNumber("Intake/Deploy/RehomeDeployTime", 0.5);
+  private static final LoggedTunableNumber deployMotionTimeout =
+      new LoggedTunableNumber(
+          "Intake/Deploy/MotionTimeoutSeconds", IntakeConstants.deployMotionTimeoutSeconds);
+  private static final LoggedTunableNumber retractMotionTimeout =
+      new LoggedTunableNumber(
+          "Intake/Deploy/RetractTimeoutSeconds", IntakeConstants.retractMotionTimeoutSeconds);
 
   // Light voltage to hold intake retracted against gravity (only applied when drifted from hard
   // stop)
@@ -107,6 +113,7 @@ public class Intake extends SubsystemBase {
   private double deployedPositionRad = 0.0;
   private double retractedPositionRad = 0.0;
   private boolean rehomeRequested = false;
+  private boolean deployFaulted = false;
   // Latches true when pushed back past threshold; stays true until fully returned to deployed
   // position, preventing bang-bang oscillation.
   private boolean positionCorrectionActive = false;
@@ -133,6 +140,8 @@ public class Intake extends SubsystemBase {
   private final Alert rollerOverTempAlert =
       new Alert("Intake roller motor over temperature.", AlertType.kWarning);
   private final Alert rollerJamAlert = new Alert("Intake roller jam detected.", AlertType.kWarning);
+  private final Alert deployMotionFaultAlert =
+      new Alert("Intake deploy motion timed out or motor disconnected.", AlertType.kError);
 
   public Intake(IntakeDeployIO deployIO, IntakeRollerIO rollerIO) {
     this.deployIO = deployIO;
@@ -142,14 +151,22 @@ public class Intake extends SubsystemBase {
   }
 
   public void setGoal(Goal goal) {
-    if (goal == Goal.IDLE && deployState == DeployState.RETRACTED) {
-      rehomeRequested = true;
+    if (deployFaulted) {
+      deployFaulted = false;
+      transitionTo(goalWantsDeploy(goal) ? DeployState.DEPLOYING : DeployState.RETRACTING);
     }
     // Re-pressing an active roller goal clears a jam so the operator doesn't need to retract first
     if (goal == Goal.INTAKE || goal == Goal.CLUMP_INTAKE || goal == Goal.EJECT) {
       rollerJammed = false;
     }
     this.goal = goal;
+  }
+
+  /** Requests a reseating pulse without changing the operator-selected goal. */
+  public void requestRehome() {
+    if (!deployFaulted && goal == Goal.IDLE && deployState == DeployState.RETRACTED) {
+      rehomeRequested = true;
+    }
   }
 
   @AutoLogOutput(key = "Intake/Goal")
@@ -191,6 +208,11 @@ public class Intake extends SubsystemBase {
     return deployState == DeployState.RETRACTED;
   }
 
+  @AutoLogOutput(key = "Intake/DeployFaulted")
+  public boolean isDeployFaulted() {
+    return deployFaulted;
+  }
+
   @AutoLogOutput(key = "Intake/RollerVelocityRPM")
   public double getRollerVelocityRPM() {
     return rollerInputs.velocityRadPerSec * 60.0 / (2.0 * Math.PI);
@@ -218,16 +240,20 @@ public class Intake extends SubsystemBase {
     if (DriverStation.isDisabled()) {
       deployIO.stop();
       rollerIO.stop();
+      stallTimer.restart();
+      updateAlerts();
+      return;
+    }
+
+    if (deployFaulted) {
+      deployIO.stop();
+      rollerIO.stop();
       updateAlerts();
       return;
     }
 
     // Determine if goal wants the intake deployed
-    boolean goalWantsDeploy =
-        goal == Goal.INTAKE
-            || goal == Goal.EJECT
-            || goal == Goal.DEPLOYED_IDLE
-            || goal == Goal.CLUMP_INTAKE;
+    boolean goalWantsDeploy = goalWantsDeploy(goal);
 
     // Current spike detection: ignore inrush, then check threshold
     boolean stallDetected =
@@ -262,6 +288,8 @@ public class Intake extends SubsystemBase {
         if (!goalWantsDeploy) {
           transitionTo(DeployState.RETRACTING);
           deployIO.setVoltage(retractVoltage.get());
+        } else if (!deployInputs.connected || stallTimer.hasElapsed(deployMotionTimeout.get())) {
+          faultDeployMotion();
         } else if (stallDetected) {
           transitionTo(DeployState.DEPLOYED);
           deployIO.stop();
@@ -314,6 +342,8 @@ public class Intake extends SubsystemBase {
         if (goalWantsDeploy) {
           transitionTo(DeployState.DEPLOYING);
           deployIO.setVoltage(deployVoltage.get());
+        } else if (!deployInputs.connected || stallTimer.hasElapsed(retractMotionTimeout.get())) {
+          faultDeployMotion();
         } else if (!shootingPressureMode
             && stallTimer.hasElapsed(IntakeConstants.deployInrushIgnoreTime)
             && deployInputs.statorCurrentAmps > retractStallCurrentThreshold.get()) {
@@ -422,6 +452,18 @@ public class Intake extends SubsystemBase {
     stallTimer.restart();
   }
 
+  private void faultDeployMotion() {
+    deployFaulted = true;
+    deployIO.stop();
+  }
+
+  private static boolean goalWantsDeploy(Goal goal) {
+    return goal == Goal.INTAKE
+        || goal == Goal.EJECT
+        || goal == Goal.DEPLOYED_IDLE
+        || goal == Goal.CLUMP_INTAKE;
+  }
+
   @AutoLogOutput(key = "Intake/Roller/StatorCurrentAmps")
   public double getRollerStatorCurrentAmps() {
     return rollerInputs.statorCurrentAmps;
@@ -438,6 +480,7 @@ public class Intake extends SubsystemBase {
     deployOverTempAlert.set(deployInputs.tempCelsius > 80.0);
     rollerOverTempAlert.set(rollerInputs.tempCelsius > 80.0);
     rollerJamAlert.set(rollerJammed);
+    deployMotionFaultAlert.set(deployFaulted);
   }
 
   private static double rpmToRadPerSec(double rpm) {
@@ -460,7 +503,7 @@ public class Intake extends SubsystemBase {
    * parallel with other intake goal commands.
    */
   public Command periodicAutoRehomeCommand() {
-    return Commands.sequence(Commands.waitSeconds(1.5), Commands.runOnce(() -> setGoal(Goal.IDLE)))
+    return Commands.sequence(Commands.waitSeconds(1.5), Commands.runOnce(this::requestRehome))
         .repeatedly()
         .withName("Intake Periodic Auto Rehome");
   }

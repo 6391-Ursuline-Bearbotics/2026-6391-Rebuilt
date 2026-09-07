@@ -25,7 +25,7 @@ Options:
     -o / --output FILE    Write report to a file in addition to stdout
     --no-practice         Exclude practice match logs
     --match LABEL         Analyze only one match (e.g. "Qual 5")
-    --module N            Highlight a specific module index (0=FL 1=FR 2=BR 3=BL)
+    --module N            Highlight a specific module index (0=FL 1=FR 2=BL 3=BR)
     --vel-thresh FLOAT    Min rad/s to consider "moving" for CPR (default: 5.0)
     --slip-vel FLOAT      rad/s threshold for slip event detection (default: 40.0)
     --slip-amp FLOAT      Max amps at slip-vel to count as a slip event (default: 15.0)
@@ -47,7 +47,7 @@ from wpiutil.log import DataLogReader
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
-MODULE_NAMES     = {0: "FL", 1: "FR", 2: "BR", 3: "BL"}
+MODULE_NAMES     = {0: "FL", 1: "FR", 2: "BL", 3: "BR"}
 DEFAULT_VEL_MIN  = 5.0    # rad/s — below this, CPR calculation skipped
 DEFAULT_SLIP_VEL = 40.0   # rad/s — ~4 m/s with 2in wheel
 DEFAULT_SLIP_AMP = 15.0   # amps  — current below this at high speed = slip event
@@ -268,7 +268,7 @@ def print_report(all_results, rpt, slip_vel, slip_amp, focus_module):
     rpt.sep()
     rpt.line("CURRENT-PER-VELOCITY (CPR) MEDIAN  (amps / rad/s, when moving)")
     rpt.line("Lower value = spinning fast for fewer amps = possible slip or free-wheel")
-    rpt.line(f'{"Match":<15} {"FL":>11} {"FR":>11} {"BR":>11} {"BL":>11}')
+    rpt.line(f'{"Match":<15} {"FL":>11} {"FR":>11} {"BL":>11} {"BR":>11}')
     rpt.line("-" * 58)
     for r in all_results:
         vals = []
@@ -283,7 +283,7 @@ def print_report(all_results, rpt, slip_vel, slip_amp, focus_module):
     mn = MODULE_NAMES[focus_module]
     rpt.line(f"CPR RATIO: {mn} vs AVERAGE OF OTHER 3 MODULES")
     rpt.line(f"  Ratio < {CPR_LOW_WARN} = low (inspect), < {CPR_LOW_CRIT} = critical (likely damage)")
-    rpt.line(f'{"Match":<15} {"FL":>9} {"FR":>9} {"BR":>9} {"BL":>9} | {mn+"/Avg3":>9}')
+    rpt.line(f'{"Match":<15} {"FL":>9} {"FR":>9} {"BL":>9} {"BR":>9} | {mn+"/Avg3":>9}')
     rpt.line("-" * 72)
     for r in all_results:
         cprs = [r[i]["cpr"]["median"] if (r[i] and r[i]["cpr"]) else None for i in range(4)]
@@ -301,7 +301,7 @@ def print_report(all_results, rpt, slip_vel, slip_amp, focus_module):
     rpt.line("VELOCITY-CURRENT PEARSON CORRELATION")
     rpt.line("  Measures how tightly current tracks velocity.  Healthy: ~0.25-0.40 (FRC swerve)")
     rpt.line("  Very low = weak load coupling = wheel may not be engaging carpet")
-    rpt.line(f'{"Match":<15} {"FL r":>8} {"FR r":>8} {"BR r":>8} {"BL r":>8}')
+    rpt.line(f'{"Match":<15} {"FL r":>8} {"FR r":>8} {"BL r":>8} {"BR r":>8}')
     rpt.line("-" * 50)
     for r in all_results:
         vals = []
@@ -314,7 +314,7 @@ def print_report(all_results, rpt, slip_vel, slip_amp, focus_module):
     rpt.line()
     rpt.sep()
     rpt.line(f"SLIP EVENTS  (|vel| > {slip_vel:.0f} rad/s  AND  current < {slip_amp:.0f}A)")
-    rpt.line(f'{"Match":<15} {"FL%":>9} {"FR%":>9} {"BR%":>9} {"BL%":>9}')
+    rpt.line(f'{"Match":<15} {"FL%":>9} {"FR%":>9} {"BL%":>9} {"BR%":>9}')
     rpt.line("-" * 54)
     for r in all_results:
         vals = []
@@ -366,7 +366,7 @@ def main():
     parser.add_argument("--match", metavar="LABEL",
                         help='Analyze only this match, e.g. "Qual 5"')
     parser.add_argument("--module", type=int, default=3, metavar="N",
-                        help="Module to highlight in CPR ratio summary (0=FL 1=FR 2=BR 3=BL, default: 3=BL)")
+                        help="Module to highlight in CPR ratio summary (0=FL 1=FR 2=BL 3=BR, default: 3=BR)")
     parser.add_argument("--vel-thresh", type=float, default=DEFAULT_VEL_MIN,
                         metavar="RADPS", help=f"Min vel for CPR calc (default {DEFAULT_VEL_MIN})")
     parser.add_argument("--slip-vel", type=float, default=DEFAULT_SLIP_VEL,

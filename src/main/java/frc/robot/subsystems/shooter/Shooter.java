@@ -120,6 +120,7 @@ public class Shooter extends SubsystemBase {
   private double hoodAngleCommandDeg = 0.0; // 0 = not active
   private double distanceToTarget = 0.0;
   private Translation2d aimTarget = Translation2d.kZero;
+  private Translation2d realTarget = Translation2d.kZero;
 
   // Hybrid control state — latches true once at setpoint, resets on goal change
   private boolean spunUp = false;
@@ -167,6 +168,9 @@ public class Shooter extends SubsystemBase {
   }
 
   public void setGoal(Goal goal) {
+    if (this.goal != goal) {
+      spunUp = false;
+    }
     this.goal = goal;
     if (goal == Goal.SHOOT || goal == Goal.PASS) {
       hoodAngleCommandDeg = 0.0;
@@ -394,11 +398,6 @@ public class Shooter extends SubsystemBase {
    * current robot pose, regardless of whether the shooter goal is active.
    */
   private void updateAimTarget() {
-    if (distanceSetpointMeters > 0.0) {
-      distanceToTarget = distanceSetpointMeters;
-      return;
-    }
-
     Pose2d robotPose = poseSupplier.get();
     Translation2d robotPosition = robotPose.getTranslation();
     boolean isRedAlliance =
@@ -406,7 +405,6 @@ public class Shooter extends SubsystemBase {
             && DriverStation.getAlliance().get() == Alliance.Red;
 
     // Determine real target (hub or passing target)
-    Translation2d realTarget;
     if (FieldConstants.isInOwnAllianceZone(robotPosition, isRedAlliance)) {
       realTarget = FieldConstants.getHubCenter(isRedAlliance);
     } else {
@@ -423,7 +421,10 @@ public class Shooter extends SubsystemBase {
     }
 
     aimTarget = compensatedTarget;
-    distanceToTarget = robotPosition.getDistance(compensatedTarget);
+    distanceToTarget =
+        distanceSetpointMeters > 0.0
+            ? distanceSetpointMeters
+            : robotPosition.getDistance(compensatedTarget);
   }
 
   /** Returns the target RPM based on the current distanceToTarget (updated each loop). */
@@ -432,28 +433,25 @@ public class Shooter extends SubsystemBase {
       return rpmOverride.get();
     }
 
-    // Radial velocity compensation: when the robot moves away from the hub the ball has less
+    // Radial velocity compensation: when the robot moves away from the selected target the ball has
+    // less
     // net speed toward it, so look up RPM for a larger effective distance. Gated by the same
     // shootOnMoveEnabled tunable as the lateral (heading) compensation.
     double effectiveDistance = distanceToTarget;
     if (shootOnMoveEnabled.get() > 0.5) {
       ChassisSpeeds fieldSpeeds = fieldSpeedsSupplier.get();
       Pose2d robotPose = poseSupplier.get();
-      boolean isRed =
-          DriverStation.getAlliance().isPresent()
-              && DriverStation.getAlliance().get() == Alliance.Red;
-      Translation2d toHub = FieldConstants.getHubCenter(isRed).minus(robotPose.getTranslation());
-      double dist = toHub.getNorm();
+      Translation2d toTarget = realTarget.minus(robotPose.getTranslation());
+      double dist = toTarget.getNorm();
       if (dist > 0.01) {
-        // Unit vector from robot toward hub
-        double ux = toHub.getX() / dist;
-        double uy = toHub.getY() / dist;
-        // Positive = moving toward hub, negative = moving away
-        double vRadialTowardHub =
+        // Unit vector from robot toward the selected hub or passing target.
+        double ux = toTarget.getX() / dist;
+        double uy = toTarget.getY() / dist;
+        // Positive = moving toward target, negative = moving away.
+        double vRadialTowardTarget =
             fieldSpeeds.vxMetersPerSecond * ux + fieldSpeeds.vyMetersPerSecond * uy;
         double tof = distanceToTOF.get(distanceToTarget);
-        // Moving away reduces ball speed toward hub — compensate by boosting effective distance
-        effectiveDistance = distanceToTarget - vRadialTowardHub * tof;
+        effectiveDistance = distanceToTarget - vRadialTowardTarget * tof;
       }
     }
     Logger.recordOutput("Shooter/EffectiveDistance", effectiveDistance);

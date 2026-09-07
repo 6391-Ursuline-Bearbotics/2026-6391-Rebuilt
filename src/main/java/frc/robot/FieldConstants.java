@@ -53,8 +53,7 @@ public class FieldConstants {
     public static final double neutralZoneEndX = fieldLength / 2.0 + Units.inchesToMeters(120);
 
     // Red alliance zone boundary (from this X to red wall)
-    public static final double redAllianceZoneX =
-        aprilTagLayout.getTagPose(4).get().getX() - Hub.width;
+    public static final double redAllianceZoneX = fieldLength - blueAllianceZoneX;
   }
 
   /** Calculate passing target based on robot position and alliance */

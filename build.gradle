@@ -128,6 +128,7 @@ wpi.java.configureTestTasks(test)
 
 // Configure string concat to always inline compile
 tasks.withType(JavaCompile) {
+    options.encoding = "UTF-8"
     options.compilerArgs.add '-XDstringConcat=inline'
 }
 
@@ -145,7 +146,8 @@ gversion {
 // Create commit with working changes on event branches
 task(eventDeploy) {
     doLast {
-        if (project.gradle.startParameter.taskNames.any({ it.toLowerCase().contains("deploy") })) {
+        if (project.gradle.startParameter.taskNames.any({ it.toLowerCase().contains("deploy") })
+                && project.findProperty("eventCommit") == "true") {
             def branchPrefix = "event"
             def branch = 'git branch --show-current'.execute().text.trim()
             def commitMessage = "Update at '${new Date().toString()}'"
@@ -169,19 +171,18 @@ task(eventDeploy) {
                 println "Not on an event branch, skipping commit"
             }
         } else {
-            println "Not running deploy task, skipping commit"
+            println "Automatic event commit disabled (use -PeventCommit=true to opt in)"
         }
     }
 }
 createVersionFile.dependsOn(eventDeploy)
 
 // Spotless formatting
-project.compileJava.dependsOn(spotlessApply)
 spotless {
     java {
         target fileTree(".") {
             include "**/*.java"
-            exclude "**/build/**", "**/build-*/**"
+            exclude "**/build/**", "**/build-*/**", "**/BuildConstants.java"
         }
         toggleOffOn()
         googleJavaFormat()
@@ -215,4 +216,8 @@ spotless {
         indentWithSpaces(2)
         endWithNewline()
     }
+}
+
+tasks.named("check") {
+    dependsOn spotlessCheck
 }

@@ -152,12 +152,15 @@ public class Drive extends SubsystemBase {
   @Override
   public void periodic() {
     odometryLock.lock(); // Prevents odometry updates while reading data
-    gyroIO.updateInputs(gyroInputs);
-    Logger.processInputs("Drive/Gyro", gyroInputs);
-    for (var module : modules) {
-      module.periodic();
+    try {
+      gyroIO.updateInputs(gyroInputs);
+      Logger.processInputs("Drive/Gyro", gyroInputs);
+      for (var module : modules) {
+        module.periodic();
+      }
+    } finally {
+      odometryLock.unlock();
     }
-    odometryLock.unlock();
 
     // Stop moving when disabled
     if (DriverStation.isDisabled()) {
@@ -321,7 +324,7 @@ public class Drive extends SubsystemBase {
         Math.hypot(sample.x - pose.getX(), sample.y - pose.getY()));
     Logger.recordOutput(
         "Drive/Trajectory/HeadingErrorDegrees",
-        Math.toDegrees(headingController.getPositionError()));
+        Math.toDegrees(MathUtil.angleModulus(sample.heading - pose.getRotation().getRadians())));
     Logger.recordOutput("Drive/Trajectory/HeadingCorrectionRawRadPerSec", headingCorrectionRaw);
     Logger.recordOutput(
         "Drive/Trajectory/HeadingCorrectionClampedRadPerSec", headingCorrectionClamped);

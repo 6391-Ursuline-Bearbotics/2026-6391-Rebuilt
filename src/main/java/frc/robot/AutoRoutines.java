@@ -223,7 +223,8 @@ public class AutoRoutines {
                 bump.cmd(),
 
                 // PID to single pass trajectory start
-                sprintToPose(singlePass.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
+                sprintToPose(singlePass.getInitialPose(), "Depot Single Pass initial pose")
+                    .withTimeout(3.0),
 
                 // Run single pass trajectory with intake collecting balls
                 singlePass.cmd(),
@@ -235,7 +236,7 @@ public class AutoRoutines {
                 bumpReturn.cmd(),
 
                 // Correct positional error introduced by bump crossing (same as Shoot First auto)
-                sprintToPose(bumpReturn.getFinalPose().orElse(new Pose2d())).withTimeout(2.0),
+                sprintToPose(bumpReturn.getFinalPose(), "Bump Return final pose").withTimeout(2.0),
 
                 // Now on the alliance side: drive toward depot at 0.5 m/s while shooting.
                 // Three branches run in parallel until auto ends:
@@ -418,7 +419,8 @@ public class AutoRoutines {
 
                 // Rush over bump with intake deployed
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
-                sprintToPose(bumpTraj.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
+                sprintToPose(bumpTraj.getInitialPose(), "Bump trajectory initial pose")
+                    .withTimeout(3.0),
                 bumpTraj.cmd()));
 
     return routine;
@@ -505,7 +507,8 @@ public class AutoRoutines {
                 Commands.waitSeconds(1.0),
 
                 // PID to gather path start so second pass is consistent
-                sprintToPose(gatherTraj.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
+                sprintToPose(gatherTraj.getInitialPose(), "Gather trajectory initial pose")
+                    .withTimeout(3.0),
 
                 // Gather: run OutpostStagingGather, deploying intake at its "Intake" marker
                 trenchGatherRun(gatherTraj)));
@@ -573,7 +576,8 @@ public class AutoRoutines {
 
                 // Rush over bump with intake deployed
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.INTAKE)),
-                sprintToPose(bumpTraj.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
+                sprintToPose(bumpTraj.getInitialPose(), "Bump trajectory initial pose")
+                    .withTimeout(3.0),
                 bumpTraj.cmd()));
 
     return routine;
@@ -638,7 +642,8 @@ public class AutoRoutines {
                 bump.cmd(),
 
                 // PID to double pass trajectory start
-                sprintToPose(doublePass.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
+                sprintToPose(doublePass.getInitialPose(), "Double pass initial pose")
+                    .withTimeout(3.0),
 
                 // Run double pass trajectory
                 doublePass.cmd(),
@@ -650,14 +655,15 @@ public class AutoRoutines {
                 Commands.runOnce(() -> intake.setGoal(Intake.Goal.IDLE)),
 
                 // PID to bump return trajectory start
-                sprintToPose(bumpReturn.getInitialPose().orElse(new Pose2d())).withTimeout(3.0),
+                sprintToPose(bumpReturn.getInitialPose(), "Bump Return initial pose")
+                    .withTimeout(3.0),
 
                 // Cross back over bump via Choreo trajectory
                 bumpReturn.cmd(),
 
                 // Sprint to final shooting position after bump (corrects positional error from bump
                 // crossing)
-                sprintToPose(bumpReturn.getFinalPose().orElse(new Pose2d())).withTimeout(2.0),
+                sprintToPose(bumpReturn.getFinalPose(), "Bump Return final pose").withTimeout(2.0),
 
                 // Aim at hub while feeding/shooting. If no tags are visible (odometry may have
                 // drifted over the bump), creep toward alliance wall until vision is restored.
@@ -732,6 +738,19 @@ public class AutoRoutines {
   /** Sprint to a target pose at high speed with heading control. */
   private Command sprintToPose(Pose2d target) {
     return sprintToPose(target, 0.3);
+  }
+
+  /** Safely skips a sprint when a trajectory endpoint failed to load. */
+  private Command sprintToPose(Optional<Pose2d> target, String description) {
+    return Commands.defer(
+        () -> {
+          if (target.isEmpty()) {
+            DriverStation.reportError("Missing " + description + "; skipping sprint.", false);
+            return Commands.none();
+          }
+          return sprintToPose(target.get());
+        },
+        Set.of(drive));
   }
 
   /**

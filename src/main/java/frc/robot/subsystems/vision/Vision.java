@@ -115,19 +115,29 @@ public class Vision extends SubsystemBase {
 
       // Loop over pose observations
       for (var observation : inputs[cameraIndex].poseObservations) {
+        boolean invalidMeasurement =
+            !inputs[cameraIndex].connected
+                || !Double.isFinite(observation.timestamp())
+                || observation.timestamp() <= 0.0
+                || !Double.isFinite(observation.pose().getX())
+                || !Double.isFinite(observation.pose().getY())
+                || !Double.isFinite(observation.pose().getZ());
+
         // Check whether to reject pose (different filtering for QuestNav vs AprilTag-based)
         boolean rejectPose;
         if (observation.type() == PoseObservationType.QUESTNAV) {
-          // QuestNav only needs field boundary check
+          // QuestNav has no AprilTag metadata, but still requires a live, finite measurement.
           rejectPose =
-              observation.pose().getX() < 0.0
+              invalidMeasurement
+                  || observation.pose().getX() < 0.0
                   || observation.pose().getX() > aprilTagLayout.getFieldLength()
                   || observation.pose().getY() < 0.0
                   || observation.pose().getY() > aprilTagLayout.getFieldWidth();
         } else {
           // AprilTag-based filtering
           rejectPose =
-              observation.tagCount() == 0 // Must have at least one tag
+              invalidMeasurement
+                  || observation.tagCount() == 0 // Must have at least one tag
                   || (observation.tagCount() == 1
                       && observation.ambiguity() > maxAmbiguity) // Cannot be high ambiguity
                   || Math.abs(observation.pose().getZ())
