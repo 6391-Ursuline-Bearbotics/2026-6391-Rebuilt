@@ -128,6 +128,7 @@ wpi.java.configureTestTasks(test)
 
 // Configure string concat to always inline compile
 tasks.withType(JavaCompile) {
+    options.encoding = "UTF-8"
     options.compilerArgs.add '-XDstringConcat=inline'
 }
 
@@ -181,7 +182,7 @@ spotless {
     java {
         target fileTree(".") {
             include "**/*.java"
-            exclude "**/build/**", "**/build-*/**"
+            exclude "**/build/**", "**/build-*/**", "**/BuildConstants.java"
         }
         toggleOffOn()
         googleJavaFormat()
