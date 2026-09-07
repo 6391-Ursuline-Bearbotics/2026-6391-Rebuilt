@@ -6,7 +6,7 @@ import edu.wpi.first.math.system.plant.LinearSystemId;
 import edu.wpi.first.wpilibj.simulation.DCMotorSim;
 
 public class IntakeDeployIOSim implements IntakeDeployIO {
-  private static final DCMotor GEARBOX = DCMotor.getFalcon500(1);
+  private static final DCMotor GEARBOX = DCMotor.getKrakenX60(1);
 
   // Hard stop boundaries in radians at the output shaft
   private static final double MIN_POSITION_RAD = 0.0;
@@ -45,10 +45,12 @@ public class IntakeDeployIOSim implements IntakeDeployIO {
     inputs.velocityRadPerSec = sim.getAngularVelocityRadPerSec();
     inputs.appliedVolts = appliedVolts;
     // Report elevated current when hitting hard stop to trigger stall detection
+    double hardStopThreshold =
+        appliedVolts < 0.0
+            ? IntakeConstants.retractCurrentThreshold
+            : IntakeConstants.deployCurrentThreshold;
     inputs.statorCurrentAmps =
-        atHardStop
-            ? IntakeConstants.deployCurrentThreshold + 20.0
-            : Math.abs(sim.getCurrentDrawAmps());
+        atHardStop ? hardStopThreshold + 5.0 : Math.abs(sim.getCurrentDrawAmps());
     inputs.supplyCurrentAmps = inputs.statorCurrentAmps * Math.abs(appliedVolts) / 12.0;
     inputs.tempCelsius = 25.0;
   }

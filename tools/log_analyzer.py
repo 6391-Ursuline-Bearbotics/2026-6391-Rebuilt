@@ -23,7 +23,7 @@ from wpiutil.log import DataLogReader
 # ---------------------------------------------------------------------------
 # Configuration / thresholds
 # ---------------------------------------------------------------------------
-MODULE_NAMES = {0: "FL", 1: "FR", 2: "BR", 3: "BL"}
+MODULE_NAMES = {0: "FL", 1: "FR", 2: "BL", 3: "BR"}
 DEFAULT_WHEEL_RADIUS_IN = 2.0   # inches; SDS MK4i L2 = ~2.0"
 
 THRESHOLDS = {
@@ -235,7 +235,7 @@ def report_drive_current(results, rpt):
     T = THRESHOLDS
     rpt.sep()
     rpt.line("SWERVE DRIVE CURRENT — MEAN (amps, enabled periods only)")
-    rpt.line(f'{"Match":<15} {"FL":>8} {"FR":>8} {"BR":>8} {"BL":>8} | {"Spread":>7}')
+    rpt.line(f'{"Match":<15} {"FL":>8} {"FR":>8} {"BL":>8} {"BR":>8} | {"Spread":>7}')
     rpt.line("-" * 65)
     for r in results:
         means = [r["modules"][i]["drive_a"]["mean"] if r["modules"][i]["drive_a"] else None for i in range(4)]
@@ -248,7 +248,7 @@ def report_drive_current(results, rpt):
     rpt.line()
     rpt.sep()
     rpt.line("SWERVE DRIVE CURRENT — 95th PERCENTILE (amps)")
-    rpt.line(f'{"Match":<15} {"FL":>8} {"FR":>8} {"BR":>8} {"BL":>8} | {"Spread":>7}')
+    rpt.line(f'{"Match":<15} {"FL":>8} {"FR":>8} {"BL":>8} {"BR":>8} | {"Spread":>7}')
     rpt.line("-" * 65)
     for r in results:
         p95s = [r["modules"][i]["drive_a"]["p95"] if r["modules"][i]["drive_a"] else None for i in range(4)]
@@ -261,7 +261,7 @@ def report_drive_current(results, rpt):
     rpt.line()
     rpt.sep()
     rpt.line("SWERVE DRIVE CURRENT — PEAK (amps)")
-    rpt.line(f'{"Match":<15} {"FL":>8} {"FR":>8} {"BR":>8} {"BL":>8}')
+    rpt.line(f'{"Match":<15} {"FL":>8} {"FR":>8} {"BL":>8} {"BR":>8}')
     rpt.line("-" * 55)
     for r in results:
         strs = [f'{r["modules"][i]["drive_a"]["max"]:8.1f}' if r["modules"][i]["drive_a"] else "     N/A" for i in range(4)]
@@ -273,7 +273,7 @@ def report_temperatures(results, rpt):
     rpt.line()
     rpt.sep()
     rpt.line(f'DRIVE MOTOR TEMPERATURE — PEAK (°C)   [warn >{T["drive_temp_warn"]:.0f}, crit >{T["drive_temp_crit"]:.0f}]')
-    rpt.line(f'{"Match":<15} {"FL":>8} {"FR":>8} {"BR":>8} {"BL":>8}')
+    rpt.line(f'{"Match":<15} {"FL":>8} {"FR":>8} {"BL":>8} {"BR":>8}')
     rpt.line("-" * 55)
     for r in results:
         strs = []
@@ -294,7 +294,7 @@ def report_temperatures(results, rpt):
     rpt.line()
     rpt.sep()
     rpt.line(f'TURN MOTOR TEMPERATURE — PEAK (°C)    [warn >{T["turn_temp_warn"]:.0f}, crit >{T["turn_temp_crit"]:.0f}]')
-    rpt.line(f'{"Match":<15} {"FL":>8} {"FR":>8} {"BR":>8} {"BL":>8}')
+    rpt.line(f'{"Match":<15} {"FL":>8} {"FR":>8} {"BL":>8} {"BR":>8}')
     rpt.line("-" * 55)
     for r in results:
         strs = []
@@ -317,7 +317,7 @@ def report_speed(results, rpt):
     rpt.line()
     rpt.sep()
     rpt.line("WHEEL SPEED — MEAN m/s (enabled, absolute value)")
-    rpt.line(f'{"Match":<15} {"FL":>7} {"FR":>7} {"BR":>7} {"BL":>7} | {"Avg":>7} {"Peak":>7}')
+    rpt.line(f'{"Match":<15} {"FL":>7} {"FR":>7} {"BL":>7} {"BR":>7} | {"Avg":>7} {"Peak":>7}')
     rpt.line("-" * 70)
     for r in results:
         means = [r["modules"][i]["speed"]["mean"] if r["modules"][i]["speed"] else None for i in range(4)]

@@ -45,6 +45,8 @@ public final class ShooterConstants {
   public static final int hoodRightServoPWM = 1;
   public static final double hoodMinAngleDeg = 20.0;
   public static final double hoodMaxAngleDeg = 45.0;
+  /** Conservative software motion estimate; the hobby servos do not provide position feedback. */
+  public static final double hoodMaxVelocityDegPerSec = 45.0;
 
   // Jam detection
   public static final double jamCurrentThreshold = 60.0; // Stator amps

@@ -18,6 +18,8 @@ public final class IntakeConstants {
   public static final double retractCurrentThreshold =
       55.0; // Stator amps indicating retracted hard stop (20% more than deploy)
   public static final double deployInrushIgnoreTime = 0.15; // Seconds to ignore after motor starts
+  public static final double deployMotionTimeoutSeconds = 3.0;
+  public static final double retractMotionTimeoutSeconds = 3.0;
   public static final double deployStatorCurrentLimit = 60.0;
 
   // Roller motor

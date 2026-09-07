@@ -31,7 +31,7 @@ by Littleton Robotics (6328).
 | **Shooter** | Dual TalonFX (Kraken X60) flywheel, adjustable servo hood |
 | **Indexer** | TalonFX belt motor, TalonFX kicker motor, 2× NEO 550 / SparkMAX spinners |
 | **Intake** | TalonFX deploy motor (25:1 reduction, current-spike hard stop), TalonFX roller (1:1) |
-| **Vision** | 2× Limelight (AprilTag pose estimation), QuestNav (real); PhotonVision (sim) |
+| **Vision** | Limelight (AprilTag pose estimation, real); PhotonVision (sim) |
 | **Controller** | NI roboRIO 2, REV PDH |
 
 ---
@@ -59,7 +59,7 @@ by Littleton Robotics (6328).
 
 Four-module swerve drivetrain using the AdvantageKit `Module` / `ModuleIO` pattern.
 
-- **Modules:** FL (11/12/13), FR (21/22/23), BR (31/32/33), BL (41/42/43) — CAN IDs are drive/turn/encoder
+- **Runtime module order:** FL index 0 (11/12/13), FR index 1 (21/22/23), BL index 2 (41/42/43), BR index 3 (31/32/33) — CAN IDs are drive/turn/encoder
 - **High-frequency odometry** via `PhoenixOdometryThread` — status signals at 250 Hz, odometry thread runs independently of the main loop
 - **Field-relative drive** with heading lock and joystick deadband
 - **Trajectory following** — `drive.followTrajectory(SwerveSample)` with combined feedforward + PID (kP = 5.0 for x/y/heading)
@@ -76,9 +76,9 @@ Dual-flywheel shooter with distance-based RPM and hood angle interpolation.
 - **Hood** — two servos (PWM 0/1) adjust launch angle between 20°–45°
 - **Interpolation tables** in `ShooterConstants` map distance → RPM, distance → hood angle, and distance → time-of-flight (for shoot-on-move compensation)
   - Effective range: ~1.3 m (close shot) to ~6.5 m (long pass)
-- **Shoot-on-move** — predicts ball landing position using robot velocity and TOF table; iterates 3× for accuracy
+- **Shoot-on-move** — predicts ball landing position using robot velocity and TOF table; iterates 2× for accuracy
 - **Hub targeting** — `Shooter.Goal.SHOOT` auto-tracks the hub using vision pose and field geometry; `shooterHeadingOffsetDegrees` in `ShooterConstants` trims physical misalignment
-- **Goals:** `IDLE`, `SHOOT` (auto-aim), `SHOOT_STATIONARY`, `EJECT`, `PASS`
+- **Goals:** `IDLE`, `SHOOT`, `PASS`, `EJECT`
 
 ### Indexer
 
@@ -98,21 +98,21 @@ Three-motor game piece path from intake to shooter.
 
 Over-the-bump ground intake with state-machine deploy.
 
-- **Deploy motor** (CAN 4, TalonFX, 25:1) — open-loop voltage control (2.8V deploy / −2.8V retract); detects hard stops via stator current spike (30A deploy / 45A retract threshold)
-- **Roller motor** (CAN 3, TalonFX, 1:1) — velocity-controlled at 3500 RPM (intake) / 4500 RPM (clump) / −4500 RPM (eject)
+- **Deploy motor** (CAN 4, TalonFX, 25:1) — open-loop voltage control (2.8V deploy / −2.5V retract); detects hard stops via stator current spike (30A deploy / 55A retract threshold) and faults safely on disconnect or motion timeout
+- **Roller motor** (CAN 3, TalonFX, 1:1) — velocity-controlled at 3600 RPM (intake) / 4000 RPM (clump) / −3600 RPM (eject)
 - **Deploy states:** `RETRACTED → DEPLOYING → DEPLOYED → RETRACTING` (state machine, not position control)
 - **Roller jam detection** — stator threshold 40A with 0.5s debounce; auto-reverses 0.25s
-- **Goals:** `IDLE`, `INTAKE`, `EJECT`, `DEPLOYED_IDLE`
+- **Goals:** `IDLE`, `INTAKE`, `EJECT`, `DEPLOYED_IDLE`, `CLUMP_INTAKE`
 
 ### Vision
 
 *`src/main/java/frc/robot/subsystems/vision/`*
 
-Multi-camera AprilTag pose estimation fused into drive odometry.
+AprilTag pose estimation fused into drive odometry.
 
-- **Real:** 2× Limelight (`VisionIOLimelight`) + QuestNav (`VisionIOQuestNav`)
+- **Real:** One Limelight (`VisionIOLimelight`)
 - **Sim:** PhotonVision (`VisionIOPhotonVisionSim`)
-- Pose observations are filtered by tag count and ambiguity before being passed to the drive pose estimator via standard deviations
+- Pose observations are filtered for camera connectivity, finite values, field bounds, tag count, and ambiguity before being passed to the drive pose estimator. A guarded QuestNav implementation remains available but is not currently instantiated on the real robot.
 
 ---
 
@@ -159,11 +159,15 @@ The auto selector runs on SmartDashboard / Elastic via `AutoChooser`.
 |---|---|
 | Left stick | Translation (field-relative) |
 | Right stick X | Rotation |
-| Left trigger | Slow mode |
-| Right trigger | Sprint |
+| A | Target-aim drive mode and shooter spinup |
+| B | Standard drive mode |
+| X | Aim at hub, then X-lock wheels; spins up shooter |
+| Y (hold) | X-lock wheels while stationary |
 | Start | Reset gyro heading |
-| B | X-stance (defense lock) |
-| Right bumper | Aim at hub (heading snap) |
+| Left bumper (hold) | Clump intake with 2 m/s drive cap |
+| Left trigger (hold) | Zone-aware auto-aim/spinup/feed; hub-activity gated |
+| Right bumper | Stop shooter and lower hood to 26° |
+| D-pad | Snap intake/front to a cardinal field heading |
 
 ### Operator (Port 1 — Xbox)
 
@@ -173,12 +177,13 @@ The auto selector runs on SmartDashboard / Elastic via `AutoChooser`.
 | B | Idle (retract intake, stop all) |
 | Y | Deployed idle (intake deployed, roller off) |
 | X | Eject |
-| Right bumper | Feed (shoot when ready) |
-| Left bumper | Shoot stationary |
-| Right trigger | Shoot on move |
-| Left trigger | Pass shot |
-| D-pad Up | Manual hood up |
-| D-pad Down | Manual hood down |
+| Left trigger (hold) | Ungated zone-aware feed with motion-adaptive intake |
+| Left bumper (hold) | Hub-activity-gated auto shot with intake |
+| Right trigger (hold) | Hub-activity-gated zone-aware auto shot |
+| Right bumper | Stop shooter and lower hood to 26° |
+| D-pad Left / Right | Set manual shot distance to 5 ft / 10 ft |
+| D-pad Up | Increase manual shot distance by 0.5 ft |
+| D-pad Down | Idle shooter and lower hood to 26° |
 
 ---
 
@@ -216,20 +221,19 @@ All devices on default CAN bus (`rio`).
 
 > **Requires WPILib JDK 17** at `C:\Users\Public\wpilib\2026\jdk`
 
-```bash
-# Build (runs Spotless formatter automatically — expect file changes)
-./gradlew build -Dorg.gradle.java.home="C:\Users\Public\wpilib\2026\jdk"
-
-# Deploy to robot
-./gradlew deploy -Dorg.gradle.java.home="C:\Users\Public\wpilib\2026\jdk"
-
-# Run tests
-./gradlew test -Dorg.gradle.java.home="C:\Users\Public\wpilib\2026\jdk"
+```powershell
+$env:JAVA_HOME = "C:\Users\Public\wpilib\2026\jdk"
+./gradlew.bat build
+./gradlew.bat deploy
+./gradlew.bat test
+./gradlew.bat spotlessApply
 ```
 
-**Spotless** (Google Java Format) runs automatically before compile and reformats code in place. This is expected — commit the formatted output.
+**Spotless** (Google Java Format) is checked by `build` without rewriting source files. Run `spotlessApply` explicitly to format changes.
 
-**Tuning mode:** Set `Constants.tuningMode = true` to expose PID gains as tunables via NetworkTables/AdvantageScope without redeploying.
+**Tuning mode:** Competition builds default to tuning mode off, which also hides characterization autos. Start the robot JVM with `-Dfrc.tuningMode=true` only during controlled testing.
+
+Deploys do not make Git commits by default. Event branches can opt into the legacy automatic commit behavior with `-PeventCommit=true`.
 
 ---
 
@@ -288,7 +292,7 @@ Produces per-match tables for:
 ### `tools/slip_analyzer.py` — Swerve Wheel Slip Detection
 
 ```bash
-python -X utf8 tools/slip_analyzer.py "C:\path\to\logs" --module 3   # 0=FL 1=FR 2=BR 3=BL
+python -X utf8 tools/slip_analyzer.py "C:\path\to\logs" --module 3   # 0=FL 1=FR 2=BL 3=BR
 ```
 
 Detects wheels that are spinning without gripping carpet by analyzing the
@@ -302,7 +306,7 @@ Produces:
 - Pearson correlation between velocity and current
 - Slip event rate (high velocity + low current samples)
 
-*STL finding: BL degraded from ratio 1.03 (Practice 4) to 0.815 (Elim 6), consistent with progressive bevel gear slip.*
+*STL finding: BR (runtime module 3) degraded from ratio 1.03 (Practice 4) to 0.815 (Elim 6), consistent with progressive bevel gear slip.*
 
 ---
 

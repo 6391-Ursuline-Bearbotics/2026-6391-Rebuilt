@@ -4,21 +4,24 @@ import edu.wpi.first.math.MathUtil;
 
 public class ShooterHoodIOSim implements ShooterHoodIO {
   private double positionDeg = ShooterConstants.hoodMinAngleDeg;
+  private double targetAngleDeg = ShooterConstants.hoodMinAngleDeg;
 
   @Override
   public void updateInputs(ShooterHoodIOInputs inputs) {
+    double maxDelta = ShooterConstants.hoodMaxVelocityDegPerSec * 0.02;
+    positionDeg += MathUtil.clamp(targetAngleDeg - positionDeg, -maxDelta, maxDelta);
     inputs.positionDeg = positionDeg;
   }
 
   @Override
   public void setAngle(double angleDeg) {
-    positionDeg =
+    targetAngleDeg =
         MathUtil.clamp(
             angleDeg, ShooterConstants.hoodMinAngleDeg, ShooterConstants.hoodMaxAngleDeg);
   }
 
   @Override
   public void stop() {
-    positionDeg = ShooterConstants.hoodMinAngleDeg;
+    targetAngleDeg = ShooterConstants.hoodMinAngleDeg;
   }
 }

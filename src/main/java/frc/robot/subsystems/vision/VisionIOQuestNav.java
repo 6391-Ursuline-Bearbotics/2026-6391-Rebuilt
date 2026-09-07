@@ -83,6 +83,13 @@ public class VisionIOQuestNav implements VisionIO {
     // Update target observation (QuestNav doesn't provide target angles)
     inputs.latestTargetObservation = new TargetObservation(Rotation2d.kZero, Rotation2d.kZero);
 
+    if (!inputs.connected) {
+      inputs.poseObservations = new PoseObservation[0];
+      inputs.tagIds = new int[0];
+      cleanUpQuestNavMessages();
+      return;
+    }
+
     // Get robot pose
     var pose = getRobotPose();
 
@@ -135,6 +142,9 @@ public class VisionIOQuestNav implements VisionIO {
   /** Gets the raw Rotation3d of the Quest. */
   public Rotation3d getQuaternion() {
     float[] qqFloats = questQuaternion.get();
+    if (qqFloats.length < 4) {
+      return Rotation3d.kZero;
+    }
     return new Rotation3d(new Quaternion(qqFloats[0], qqFloats[1], qqFloats[2], qqFloats[3]));
   }
 
@@ -156,9 +166,12 @@ public class VisionIOQuestNav implements VisionIO {
   /** Gets the raw pose of the oculus, relative to the position where it started. */
   private Pose2d getUncorrectedOculusPose() {
     var eulerAngles = questEulerAngles.get();
+    var questnavPosition = questPosition.get();
+    if (eulerAngles.length < 2 || questnavPosition.length < 3) {
+      return new Pose2d();
+    }
     var rotation = Rotation2d.fromDegrees(-Math.IEEEremainder(eulerAngles[1], 360d));
 
-    var questnavPosition = questPosition.get();
     var translation = new Translation2d(questnavPosition[2], -questnavPosition[0]);
     return new Pose2d(translation, rotation);
   }

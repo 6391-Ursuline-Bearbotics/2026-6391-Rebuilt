@@ -18,8 +18,12 @@ public final class Constants {
   public static final Mode simMode = Mode.SIM;
   public static final Mode currentMode = RobotBase.isReal() ? Mode.REAL : simMode;
 
-  /** Enable tunable numbers via NetworkTables for PID tuning in AdvantageScope. */
-  public static final boolean tuningMode = true;
+  /**
+   * Enable tunable numbers and characterization routines. Disabled by default so competition builds
+   * do not expose potentially dangerous test commands. Pass {@code -Dfrc.tuningMode=true} when
+   * intentionally tuning in simulation or on a controlled test robot.
+   */
+  public static final boolean tuningMode = Boolean.getBoolean("frc.tuningMode");
 
   public static enum Mode {
     /** Running on a real robot. */

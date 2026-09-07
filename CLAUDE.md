@@ -7,12 +7,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 All Gradle commands require WPILib's JDK 17:
 
 ```bash
-./gradlew build -Dorg.gradle.java.home="C:\Users\Public\wpilib\2026\jdk"
-./gradlew deploy -Dorg.gradle.java.home="C:\Users\Public\wpilib\2026\jdk"
-./gradlew test -Dorg.gradle.java.home="C:\Users\Public\wpilib\2026\jdk"
+$env:JAVA_HOME = "C:\Users\Public\wpilib\2026\jdk"
+./gradlew.bat build
+./gradlew.bat deploy
+./gradlew.bat test
+./gradlew.bat spotlessApply
 ```
 
-Spotless (Google Java Format) runs automatically before compile. It will reformat code on build, so expect files to be modified after building.
+Spotless (Google Java Format) is checked by `build` without modifying source files. Run `spotlessApply` explicitly before committing.
 
 ## Architecture
 
@@ -55,17 +57,17 @@ Constants are co-located with their subsystem (e.g., `IntakeConstants.java`, `Vi
 ## Subsystems
 
 - **Drive** — Swerve with TalonFX modules, Pigeon2 gyro, high-frequency odometry thread, Choreo trajectory following, SysId
-- **Vision** — Multi-camera (Limelight + QuestNav real, PhotonVision sim), AprilTag pose estimation
+- **Vision** — Limelight real, PhotonVision sim, AprilTag pose estimation; QuestNav IO is available but not instantiated
 - **Intake** — Deploy motor (25:1, current-spike hard stop detection, state machine) + Roller motor (1:1, velocity control). Goal-based control: IDLE, INTAKE, EJECT, DEPLOYED_IDLE
 
 ## Controllers
 
-- Port 0: Driver (`drv`) — drive modes, gyro reset
-- Port 1: Operator (`op`) — intake controls (A=intake, B=idle, Y=deployed idle)
+- Port 0: Driver (`drv`) — standard/target-aim modes, cardinal snaps, clump intake, gated auto shot, gyro reset
+- Port 1: Operator (`op`) — intake/eject controls, gated and ungated shot workflows, manual shot distance
 
 ## CAN IDs
 
-Swerve modules: FL(11,12,13) FR(21,22,23) BR(31,32,33) BL(41,42,43). Pigeon2: 1. Intake: Deploy=51, Roller=52 (placeholders in `IntakeConstants`). Default CAN bus (rio).
+Runtime module order: 0=FL(11,12,13), 1=FR(21,22,23), 2=BL(41,42,43), 3=BR(31,32,33). Pigeon2: 1. Intake: Deploy=4, Roller=3. Default CAN bus (rio).
 
 ## Log Analysis Tools
 
@@ -119,12 +121,12 @@ python -X utf8 tools/log_analyzer.py "C:\path\to\logs" -w 2.0   # wheel radius i
 
 ```bash
 python -X utf8 tools/slip_analyzer.py "C:\path\to\logs"
-python -X utf8 tools/slip_analyzer.py "C:\path\to\logs" --module 3   # focus on BL (default)
-python -X utf8 tools/slip_analyzer.py "C:\path\to\logs" --module 2   # focus on BR
+python -X utf8 tools/slip_analyzer.py "C:\path\to\logs" --module 3   # focus on BR (default)
+python -X utf8 tools/slip_analyzer.py "C:\path\to\logs" --module 2   # focus on BL
 ```
 
 **Options:**
-- `--module N` — which module to highlight in the CPR ratio summary (0=FL 1=FR 2=BR 3=BL)
+- `--module N` — which module to highlight in the CPR ratio summary (0=FL 1=FR 2=BL 3=BR)
 - `--slip-vel` — rad/s threshold above which "slip events" are counted (default 40)
 - `--slip-amp` — max amps at slip-vel to count as a slip event (default 15A)
 
@@ -141,9 +143,9 @@ python -X utf8 tools/slip_analyzer.py "C:\path\to\logs" --module 2   # focus on 
 - Single-match spike in p95 current = possible debris/impact event
 
 **STL competition findings (for reference):**
-- BL (module 3) started healthy in Practice 4/7 (ratio ~1.03) and degraded to 0.815 by Elim 6
-- Signature showed BL drawing 10-15% less current at 10-40 rad/s vs other modules
-- Conclusion: BL bevel gear slip or wheel surface wear that developed during the event
+- BR (module 3) started healthy in Practice 4/7 (ratio ~1.03) and degraded to 0.815 by Elim 6
+- Signature showed BR drawing 10-15% less current at 10-40 rad/s vs other modules
+- Conclusion: BR bevel gear slip or wheel surface wear that developed during the event
 
 ---
 
