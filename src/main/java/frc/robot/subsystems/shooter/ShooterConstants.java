@@ -49,7 +49,7 @@ public final class ShooterConstants {
   // Hood-down proximity switch (roboRIO DIO channel)
   // A normally-open switch wired from signal to ground reads low when actuated.
   public static final int hoodDownSwitchDIO = 0;
-  public static final boolean hoodDownSwitchActiveLow = true;
+  public static final boolean hoodDownSwitchActiveLow = false;
 
   // Jam detection
   public static final double jamCurrentThreshold = 60.0; // Stator amps
