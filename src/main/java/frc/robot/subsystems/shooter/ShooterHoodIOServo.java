@@ -1,22 +1,27 @@
 package frc.robot.subsystems.shooter;
 
 import edu.wpi.first.math.MathUtil;
+import edu.wpi.first.wpilibj.DigitalInput;
 import edu.wpi.first.wpilibj.Servo;
 
 public class ShooterHoodIOServo implements ShooterHoodIO {
   private final Servo leftServo;
   private final Servo rightServo;
+  private final DigitalInput hoodDownSwitch;
 
   private double commandedAngleDeg = ShooterConstants.hoodMinAngleDeg;
 
   public ShooterHoodIOServo() {
     leftServo = new Servo(ShooterConstants.hoodLeftServoPWM);
     rightServo = new Servo(ShooterConstants.hoodRightServoPWM);
+    hoodDownSwitch = new DigitalInput(ShooterConstants.hoodDownSwitchDIO);
   }
 
   @Override
   public void updateInputs(ShooterHoodIOInputs inputs) {
     inputs.positionDeg = commandedAngleDeg;
+    boolean rawSwitchValue = hoodDownSwitch.get();
+    inputs.hoodDown = ShooterConstants.hoodDownSwitchActiveLow ? !rawSwitchValue : rawSwitchValue;
   }
 
   @Override

@@ -46,6 +46,11 @@ public final class ShooterConstants {
   public static final double hoodMinAngleDeg = 20.0;
   public static final double hoodMaxAngleDeg = 45.0;
 
+  // Hood-down proximity switch (roboRIO DIO channel)
+  // A normally-open switch wired from signal to ground reads low when actuated.
+  public static final int hoodDownSwitchDIO = 0;
+  public static final boolean hoodDownSwitchActiveLow = true;
+
   // Jam detection
   public static final double jamCurrentThreshold = 60.0; // Stator amps
   public static final double jamDebounceTime = 1.0; // Seconds

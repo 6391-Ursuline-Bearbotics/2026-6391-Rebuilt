@@ -562,10 +562,10 @@ public class Shooter extends SubsystemBase {
     return Math.abs(hoodInputs.positionDeg - targetDeg) < toleranceDeg;
   }
 
-  /** Returns true if the hood is at or below 26 degrees. */
+  /** Returns the hood-down state reported by the normally-open proximity switch. */
   @AutoLogOutput(key = "Shooter/HoodAtOrBelow26Deg")
   public boolean isHoodAtOrBelow26Deg() {
-    return hoodInputs.positionDeg <= 26.0;
+    return hoodInputs.hoodDown;
   }
 
   private void updateAlerts() {

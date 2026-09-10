@@ -8,6 +8,7 @@ public class ShooterHoodIOSim implements ShooterHoodIO {
   @Override
   public void updateInputs(ShooterHoodIOInputs inputs) {
     inputs.positionDeg = positionDeg;
+    inputs.hoodDown = positionDeg <= 26.0;
   }
 
   @Override

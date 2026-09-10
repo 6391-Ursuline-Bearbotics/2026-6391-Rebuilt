@@ -6,6 +6,7 @@ public interface ShooterHoodIO {
   @AutoLog
   public static class ShooterHoodIOInputs {
     public double positionDeg = 0.0;
+    public boolean hoodDown = false;
   }
 
   public default void updateInputs(ShooterHoodIOInputs inputs) {}
