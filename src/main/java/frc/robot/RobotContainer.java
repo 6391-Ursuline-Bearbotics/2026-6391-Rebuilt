@@ -60,6 +60,8 @@ import frc.robot.subsystems.intake.IntakeDeployIOTalonFX;
 import frc.robot.subsystems.intake.IntakeRollerIO;
 import frc.robot.subsystems.intake.IntakeRollerIOSim;
 import frc.robot.subsystems.intake.IntakeRollerIOTalonFX;
+import frc.robot.subsystems.led.LEDConstants;
+import frc.robot.subsystems.led.LEDSubsystem;
 import frc.robot.subsystems.shooter.Shooter;
 import frc.robot.subsystems.shooter.ShooterConstants;
 import frc.robot.subsystems.shooter.ShooterHoodIO;
@@ -68,7 +70,6 @@ import frc.robot.subsystems.shooter.ShooterHoodIOSim;
 import frc.robot.subsystems.shooter.ShooterIO;
 import frc.robot.subsystems.shooter.ShooterIOSim;
 import frc.robot.subsystems.shooter.ShooterIOTalonFX;
-import frc.robot.subsystems.led.LEDSubsystem;
 import frc.robot.subsystems.vision.Vision;
 import frc.robot.subsystems.vision.VisionIO;
 import frc.robot.subsystems.vision.VisionIOLimelight;
@@ -97,10 +98,12 @@ public class RobotContainer {
   private final Intake intake;
   private final Indexer indexer;
   private final Shooter shooter;
+  private final LEDSubsystem led;
 
   // Set to false to use no-op IO when hardware is not connected
   private static final boolean indexerEnabled = true;
   private static final boolean shooterEnabled = true;
+  private static final boolean ledEnabled = true;
 
   // Controllers
   private final CommandXboxController drv = new CommandXboxController(0);
@@ -181,6 +184,11 @@ public class RobotContainer {
                         .or(op.leftTrigger(0.5))
                         .or(op.leftBumper()));
 
+        led =
+            ledEnabled
+                ? new LEDSubsystem(
+                    LEDConstants.ledPWMPort, LEDConstants.ledLength, shooter::isHoodDown)
+                : null;
         break;
 
       case SIM:
@@ -215,6 +223,11 @@ public class RobotContainer {
                     .or(op.rightTrigger(0.5))
                     .or(op.leftTrigger(0.5))
                     .or(op.leftBumper()));
+        led =
+            ledEnabled
+                ? new LEDSubsystem(
+                    LEDConstants.ledPWMPort, LEDConstants.ledLength, shooter::isHoodDown)
+                : null;
         break;
 
       default:
@@ -243,6 +256,7 @@ public class RobotContainer {
                 () -> indexer.getGoal() == Indexer.Goal.FEED,
                 drive::getPitch,
                 () -> false);
+        led = null;
         break;
     }
 

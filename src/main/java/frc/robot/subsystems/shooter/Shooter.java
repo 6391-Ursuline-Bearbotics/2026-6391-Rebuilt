@@ -568,6 +568,12 @@ public class Shooter extends SubsystemBase {
     return hoodInputs.hoodDown;
   }
 
+  /** Returns true if the hood is in the down position as reported by the proximity switch. */
+  @AutoLogOutput(key = "Shooter/HoodDown")
+  public boolean isHoodDown() {
+    return hoodInputs.hoodDown;
+  }
+
   private void updateAlerts() {
     leftDisconnectedAlert.set(!inputs.leftConnected && Constants.currentMode != Mode.SIM);
     rightDisconnectedAlert.set(!inputs.rightConnected && Constants.currentMode != Mode.SIM);
